@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pandas as pd
 import requests
@@ -13,8 +15,30 @@ import streamlit as st
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-API_BASE = st.secrets.get("api_base_url", "http://localhost:8000")
-MCP_BASE = st.secrets.get("mcp_base_url", "http://localhost:8585/mcp")
+def _safe_secret(key: str, default: str) -> str:
+    """Read Streamlit secret if available, else fallback to env/default."""
+    try:
+        return str(st.secrets.get(key, os.getenv(key.upper(), default)))
+    except Exception:
+        return str(os.getenv(key.upper(), default))
+
+
+API_BASE = _safe_secret("api_base_url", "http://localhost:8000")
+MCP_BASE = _safe_secret("mcp_base_url", "http://localhost:8585/mcp")
+
+
+def _find_logo_file() -> Path | None:
+    """Find a logo image from the repository logo directory."""
+    root = Path(__file__).resolve().parents[1]
+    logo_dir = root / "logo"
+    if not logo_dir.exists():
+        return None
+
+    for pattern in ("*.png", "*.jpg", "*.jpeg", "*.webp", "*.svg"):
+        files = sorted(logo_dir.glob(pattern))
+        if files:
+            return files[0]
+    return None
 
 
 def _inject_css() -> None:
@@ -83,7 +107,7 @@ h1, h2, h3 { color: var(--text) !important; letter-spacing: 0.3px; }
   margin-top: 14px;
 }
 
-.dot { font-size: 16px; vertical-align: middle; }
+.dot { font-size: 10px; vertical-align: middle; margin-right: 6px; }
 
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(8px); }
@@ -155,11 +179,11 @@ def _stream_chat(message: str, dataset_path: str | None = None) -> tuple[str, di
 
             if "token" in event:
                 full_text += event["token"]
-                placeholder.markdown(f"<div class='chat-agent'>{full_text}</div>", unsafe_allow_html=True)
+                placeholder.markdown(full_text)
             if "scan_result" in event:
                 scan_result = event["scan_result"]
 
-    placeholder.markdown(f"<div class='chat-agent'>{full_text}</div>", unsafe_allow_html=True)
+    placeholder.markdown(full_text)
     return full_text, scan_result
 
 
@@ -179,7 +203,16 @@ def _render_risk_card(scan: dict) -> None:
     table = scan.get("table_fqn", "dataset")
     carbon = scan.get("carbon_saved_kg", 0)
     pdf = scan.get("pdf_path")
-    om_url = MCP_BASE.replace("/mcp", "")
+    pdf_url = None
+    if pdf:
+        if str(pdf).startswith(("http://", "https://")):
+            pdf_url = str(pdf)
+        else:
+            pdf_url = f"{API_BASE.rstrip('/')}/{str(pdf).lstrip('./')}"
+    om_base = MCP_BASE.rsplit("/mcp", 1)[0] if "/mcp" in MCP_BASE else MCP_BASE
+    is_mock_mcp = ":8586" in om_base
+    metadata_url = f"{om_base}/mcp/state" if is_mock_mcp else om_base
+    metadata_label = "Open MCP State (Mock)" if is_mock_mcp else "Open in OpenMetadata"
 
     st.markdown(
         f"""
@@ -190,7 +223,7 @@ def _render_risk_card(scan: dict) -> None:
   <div style='margin-top:6px;'>Drift: {drift} | Anomalies: {float(anomaly_rate) * 100:.1f}%</div>
   <div style='margin-top:4px;'>CO2 saved by blocking: {carbon:.1f}kg</div>
   <div style='margin-top:10px;'>
-    <a href='{pdf or '#'}' target='_blank'>View PDF</a> | <a href='{om_url}' target='_blank'>Open in OpenMetadata</a>
+        <a href='{pdf_url or '#'}' target='_blank'>View PDF</a> | <a href='{metadata_url}' target='_blank'>{metadata_label}</a>
   </div>
 </div>
         """,
@@ -240,8 +273,11 @@ def engineer_tab() -> None:
     st.subheader("Engineer Chat Interface")
 
     for msg in st.session_state["messages"]:
-        style = "chat-user" if msg["role"] == "user" else "chat-agent"
-        st.markdown(f"<div class='{style}'>{msg['content']}</div>", unsafe_allow_html=True)
+        if msg["role"] == "user":
+            st.markdown(f"<div class='chat-user'>{msg['content']}</div>", unsafe_allow_html=True)
+        else:
+            # Parse markdown so **bold** and bullet formatting render correctly.
+            st.markdown(msg["content"])
 
     suggestions = [
         "Is my dataset safe?",
@@ -343,6 +379,10 @@ def compliance_tab() -> None:
 
 
 def sidebar() -> None:
+    logo_path = _find_logo_file()
+    if logo_path is not None:
+        st.sidebar.image(str(logo_path), use_container_width=True)
+
     st.sidebar.markdown("## MetaVerdax Agent")
 
     api_ok = _check_health(f"{API_BASE}/health")

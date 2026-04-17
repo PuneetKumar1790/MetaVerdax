@@ -3,3 +3,8 @@ __pycache__/
 *.pyc
 .pytest_cache/
 *.db
+
+# Generated runtime artifacts
+reports/agent/*.pdf
+reports/agent/*.summary.json
+meta_verdax_sessions.db
