@@ -1,0 +1,106 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "MetaVerdax: Start Mock MCP",
+      "type": "shell",
+      "command": "/data/We_Make_Devs/MetaVerdax/.venv/bin/python",
+      "args": ["tests/demo_setup.py", "--mock-mcp"],
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "custom",
+        "pattern": [
+          {
+            "regexp": ".*"
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Starting mock MCP server",
+          "endsPattern": "Uvicorn running on http://0.0.0.0:8586/mcp|Uvicorn running on http://127.0.0.1:8586/mcp"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "MetaVerdax"
+      }
+    },
+    {
+      "label": "MetaVerdax: Start Backend",
+      "type": "shell",
+      "command": "/data/We_Make_Devs/MetaVerdax/.venv/bin/python",
+      "args": ["-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000"],
+      "options": {
+        "env": {
+          "OPENMETADATA_URL": "http://127.0.0.1:8586",
+          "MCP_ENDPOINT": "/mcp"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "custom",
+        "pattern": [
+          {
+            "regexp": ".*"
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Waiting for application startup",
+          "endsPattern": "Uvicorn running on http://127.0.0.1:8000"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "MetaVerdax"
+      }
+    },
+    {
+      "label": "MetaVerdax: Start Frontend",
+      "type": "shell",
+      "command": "/data/We_Make_Devs/MetaVerdax/.venv/bin/python",
+      "args": ["-m", "streamlit", "run", "dashboard/agent_app.py", "--server.headless", "true", "--server.port", "8501"],
+      "options": {
+        "env": {
+          "API_BASE_URL": "http://127.0.0.1:8000",
+          "MCP_BASE_URL": "http://127.0.0.1:8586/mcp"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "custom",
+        "pattern": [
+          {
+            "regexp": ".*"
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "You can now view your Streamlit app in your browser",
+          "endsPattern": "Local URL: http://localhost:8501|Network URL: http://.*:8501"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "MetaVerdax"
+      }
+    },
+    {
+      "label": "MetaVerdax: Run Full Stack",
+      "dependsOn": [
+        "MetaVerdax: Start Mock MCP",
+        "MetaVerdax: Start Backend",
+        "MetaVerdax: Start Frontend"
+      ],
+      "dependsOrder": "parallel",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}
