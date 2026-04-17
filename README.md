@@ -4,7 +4,7 @@ AI-powered data governance and observability agent for OpenMetadata.
 
 MetaVerdax turns natural-language requests into executable governance workflows:
 - reads metadata from OpenMetadata through MCP
-- runs Verdax validation/drift/anomaly checks on incoming datasets
+- runs MetaVerdax validation/drift/anomaly checks on incoming datasets
 - assigns risk (`SAFE`, `WARN`, `REVIEW`, `CRITICAL`)
 - writes findings back to metadata systems (observations, tasks, tags)
 - generates audit-ready PDF reports with lineage and carbon impact context
@@ -31,7 +31,7 @@ MetaVerdax provides an AI-agent layer over metadata + observability to prevent r
   - Compliance metrics, blocked retrains, export actions
 - MCP client for OpenMetadata (`/mcp`) with read + write actions
 - LLM abstraction layer (Groq, Gemini, Anthropic)
-- Verdax runtime integration:
+- MetaVerdax runtime integration:
   - schema/range/null validation
   - drift detection
   - anomaly scoring
@@ -54,7 +54,7 @@ Streamlit UI (dashboard/agent_app.py)
    v
 FastAPI API (app/main.py + app/routes/agent_routes.py)
    |
-   +--> VerdaxAgent (app/agent/verdax_agent.py)
+   +--> MetaVerdaxAgent (app/agent/verdax_agent.py)
           |
           +--> LLM Client (app/llm/client.py)
           |      - planning JSON + response synthesis
@@ -63,7 +63,7 @@ FastAPI API (app/main.py + app/routes/agent_routes.py)
           |      - get_table, get_lineage, profiles
           |      - push observation, create task, tag entity
           |
-          +--> Verdax Core Modules (external reference root)
+          +--> MetaVerdax Core Modules (external reference root)
                  - validator, drift detector, anomaly scorer
                  - carbon calculator, report generator
 
@@ -99,7 +99,7 @@ tests/
 - Python 3.11+
 - MongoDB running locally or remotely
 - OpenMetadata instance with MCP endpoint (or mock MCP for demo)
-- Access to Verdax runtime source (configured via `VERDAX_REFERENCE_ROOT`)
+- Access to MetaVerdax runtime source (configured via `VERDAX_REFERENCE_ROOT`)
 - At least one LLM provider API key (Groq/Gemini/Anthropic)
 
 ## Configuration
@@ -132,10 +132,10 @@ MONGODB_SCANS_COLLECTION=verdax_scans
 API_BASE_URL=http://localhost:8000
 ```
 
-Optional environment variable for Verdax module imports:
+Optional environment variable for MetaVerdax module imports:
 
 ```bash
-export VERDAX_REFERENCE_ROOT=/data/We_Make_Devs/Verdax
+export VERDAX_REFERENCE_ROOT=/data/We_Make_Devs/MetaVerdax
 ```
 
 ## Local Run
@@ -213,7 +213,7 @@ curl -X POST http://localhost:8000/agent/upload-and-scan \
 1. Parse user intent from natural language.
 2. Build action plan (JSON) with entities and required actions.
 3. Pull metadata/context through MCP.
-4. Run Verdax checks on uploaded or referenced dataset.
+4. Run MetaVerdax checks on uploaded or referenced dataset.
 5. Compute risk level and recommendations.
 6. If risky, create governance task and add risk tag.
 7. Push observation back to metadata.

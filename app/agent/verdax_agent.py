@@ -1,4 +1,4 @@
-"""MetaVerdax agent orchestration: LLM planning + MCP + Verdax runtime."""
+"""MetaVerdax agent orchestration: LLM planning + MCP + MetaVerdax runtime."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ VERDAX_REFERENCE_ROOT = os.getenv("VERDAX_REFERENCE_ROOT", "/data/We_Make_Devs/V
 if VERDAX_REFERENCE_ROOT not in sys.path:
     sys.path.insert(0, VERDAX_REFERENCE_ROOT)
 
-# Import existing Verdax components as-is.
+# Import existing MetaVerdax components as-is.
 from core.anomaly_scorer import AnomalyScorer  # type: ignore
 from core.carbon_calculator import CarbonCalculator  # type: ignore
 from core.drift_detector import DriftDetector  # type: ignore
@@ -38,8 +38,8 @@ class PlanEntities:
     assignee: str | None = None
 
 
-class VerdaxAgent:
-    """Agent that plans actions with LLM and executes MCP + Verdax workflows."""
+class MetaVerdaxAgent:
+    """Agent that plans actions with LLM and executes MCP + MetaVerdax workflows."""
 
     def __init__(self, mcp_client: OpenMetadataMCPClient, llm_client: Any, model: str):
         self.mcp = mcp_client
@@ -144,7 +144,7 @@ class VerdaxAgent:
                     context["results"][action] = {"status": "skipped", "reason": "risk below REVIEW"}
             elif action == "tag_entity" and table_fqn:
                 risk_level = context["results"].get("calculate_risk", "SAFE")
-                context["results"][action] = await self.mcp.tag_entity(table_fqn, [f"VerdaxRisk.{risk_level}"])
+                context["results"][action] = await self.mcp.tag_entity(table_fqn, [f"MetaVerdaxRisk.{risk_level}"])
 
         context["scan_result"] = self._build_scan_result(context, table_fqn=table_fqn, dataset_path=resolved_dataset_path)
         return context

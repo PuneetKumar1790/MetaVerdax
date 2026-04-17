@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     anthropic_api_key: str = ""
 
-    # Verdax
+    # MetaVerdax
     max_upload_size_mb: int = 100
     temp_upload_dir: str = "/tmp/verdax_uploads"
     reports_dir: str = "reports/agent"

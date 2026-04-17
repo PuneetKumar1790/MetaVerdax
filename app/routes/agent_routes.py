@@ -14,14 +14,14 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.agent.session_store import SessionStore
-from app.agent.verdax_agent import VerdaxAgent
+from app.agent.verdax_agent import MetaVerdaxAgent
 from app.config.settings import settings
 from app.llm.client import LLMClient
 from app.mcp_client import OpenMetadataMCPClient
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 session_store = SessionStore()
-agents: dict[str, VerdaxAgent] = {}
+agents: dict[str, MetaVerdaxAgent] = {}
 
 
 class ChatRequest(BaseModel):
@@ -56,7 +56,7 @@ def _build_llm_client() -> LLMClient:
     return LLMClient(provider=provider, api_key=api_key, model=settings.llm_model)
 
 
-def _get_agent(session_id: str) -> VerdaxAgent:
+def _get_agent(session_id: str) -> MetaVerdaxAgent:
     if session_id in agents:
         return agents[session_id]
 
@@ -64,7 +64,7 @@ def _get_agent(session_id: str) -> VerdaxAgent:
         base_url=f"{settings.openmetadata_url.rstrip('/')}{settings.mcp_endpoint}",
         token=settings.openmetadata_token,
     )
-    agent = VerdaxAgent(mcp_client=mcp_client, llm_client=_build_llm_client(), model=settings.llm_model)
+    agent = MetaVerdaxAgent(mcp_client=mcp_client, llm_client=_build_llm_client(), model=settings.llm_model)
 
     existing_history = session_store.get_history(session_id)
     if existing_history:

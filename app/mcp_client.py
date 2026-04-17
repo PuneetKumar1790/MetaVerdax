@@ -147,7 +147,7 @@ class OpenMetadataMCPClient:
         return []
 
     async def push_observation(self, fqn: str, observation: dict) -> dict:
-        """Push a Verdax observation into OpenMetadata test/quality artifacts."""
+        """Push a MetaVerdax observation into OpenMetadata test/quality artifacts."""
         payload = {"fullyQualifiedName": fqn, "observation": observation}
         try:
             return await self.call_tool("create_test_result", payload)
@@ -172,7 +172,7 @@ class OpenMetadataMCPClient:
         return await self.call_tool("create_task", args)
 
     async def tag_entity(self, fqn: str, tags: list[str]) -> dict:
-        """Tag an entity with Verdax risk labels."""
+        """Tag an entity with MetaVerdax risk labels."""
         return await self.call_tool("add_tags", {"fullyQualifiedName": fqn, "tags": tags})
 
     async def _rpc_call_with_fallbacks(

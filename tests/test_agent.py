@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.agent.verdax_agent import VerdaxAgent
+from app.agent.verdax_agent import MetaVerdaxAgent
 
 
 class FakeMCP:
@@ -63,7 +63,7 @@ def test_agent_run_produces_scan_result(tmp_path: Path) -> None:
     dataset_path = tmp_path / "sample.csv"
     df.to_csv(dataset_path, index=False)
 
-    agent = VerdaxAgent(mcp_client=FakeMCP(), llm_client=FakeLLM(), model="mock")
+    agent = MetaVerdaxAgent(mcp_client=FakeMCP(), llm_client=FakeLLM(), model="mock")
 
     async def _run() -> list[str]:
         streamed: list[str] = []
@@ -80,7 +80,7 @@ def test_agent_run_produces_scan_result(tmp_path: Path) -> None:
 
 
 def test_calculate_risk_thresholds() -> None:
-    agent = VerdaxAgent(mcp_client=FakeMCP(), llm_client=FakeLLM(), model="mock")
+    agent = MetaVerdaxAgent(mcp_client=FakeMCP(), llm_client=FakeLLM(), model="mock")
 
     risk = agent._calculate_risk(
         validation_result={"critical_failures": 1, "warnings": 0},

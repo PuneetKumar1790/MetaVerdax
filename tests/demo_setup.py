@@ -209,7 +209,7 @@ def build_mock_mcp_app() -> FastAPI:
         if tool_name == "create_task":
             task = {
                 "id": f"task_{len(state['tasks']) + 1}",
-                "title": arguments.get("title", "Verdax Risk Alert"),
+                "title": arguments.get("title", "MetaVerdax Risk Alert"),
                 "description": arguments.get("description", ""),
                 "assignee": arguments.get("assignee"),
                 "fullyQualifiedName": arguments.get("fullyQualifiedName"),
