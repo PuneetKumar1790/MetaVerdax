@@ -1,6 +1,6 @@
 # MetaVerdax Agent
 
-AI-powered data governance and observability agent for OpenMetadata, built for the **Back to the Metadata Hackathon (Apr 17-26, 2026)**.
+AI-powered data governance and observability agent for OpenMetadata.
 
 MetaVerdax turns natural-language requests into executable governance workflows:
 - reads metadata from OpenMetadata through MCP
@@ -231,7 +231,7 @@ Current coverage focuses on:
 - agent orchestration and risk outputs
 - MCP client behavior and error handling
 
-## Hackathon Positioning
+## Project Positioning
 
 Primary track: **MCP Ecosystem & AI Agents**
 
