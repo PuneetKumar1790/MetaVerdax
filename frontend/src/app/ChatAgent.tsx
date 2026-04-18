@@ -1,14 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Download, AlertTriangle, CheckCircle, Bot, User, Loader2 } from 'lucide-react';
+import { Send, Download, AlertTriangle, CheckCircle, Bot, User, Loader2, Upload, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { api, type ChatResponse } from '../lib/api';
+import { api, type ChatResponse, type ScanResultSummary } from '../lib/api';
 
 interface Message {
   role: 'user' | 'agent';
   content: string;
   risk_score?: string;
   report_id?: string;
+  scan_result?: ScanResultSummary | null;
 }
 
 const starters = [
@@ -22,6 +23,11 @@ export default function ChatAgent() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scanLoading, setScanLoading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [latestScan, setLatestScan] = useState<ScanResultSummary | null>(null);
+  const [uploadTableFqn, setUploadTableFqn] = useState('ecommerce.customer_churn_v3');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -45,7 +51,11 @@ export default function ChatAgent() {
         content: data.response,
         risk_score: data.risk_score,
         report_id: data.report_id,
+        scan_result: data.scan_result ?? null,
       };
+      if (data.scan_result) {
+        setLatestScan(data.scan_result);
+      }
       setMessages((prev) => [...prev, agentMsg]);
     } catch (err) {
       setError(
@@ -59,6 +69,30 @@ export default function ChatAgent() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     sendMessage(input);
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile || scanLoading) return;
+    setScanLoading(true);
+    setUploadError(null);
+    try {
+      const scan = await api.uploadAndScan(selectedFile, uploadTableFqn, 'frontend-upload-session');
+      setLatestScan(scan);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'agent',
+          content: `Upload complete for ${selectedFile.name}. Risk level: ${scan.risk_level ?? 'UNKNOWN'}.`,
+          risk_score: scan.risk_level === 'CRITICAL' ? 'CRITICAL' : scan.risk_level === 'REVIEW' || scan.risk_level === 'WARN' ? 'HIGH' : 'APPROVED',
+          report_id: scan.pdf_path ? scan.pdf_path.split('/').pop() : undefined,
+          scan_result: scan,
+        },
+      ]);
+    } catch {
+      setUploadError('Upload failed. Check the backend and try again.');
+    } finally {
+      setScanLoading(false);
+    }
   };
 
   const getRiskBanner = (score?: string) => {
@@ -81,6 +115,35 @@ export default function ChatAgent() {
       );
     }
     return null;
+  };
+
+  const renderScanSummary = (scan?: ScanResultSummary | null) => {
+    if (!scan) return null;
+    return (
+      <div className="mt-3 rounded-xl border border-brand-cyan/20 bg-brand-cyan/[0.04] p-3 text-xs text-white/75 space-y-2">
+        <div className="flex items-center gap-2 text-brand-cyan font-semibold uppercase tracking-wider">
+          <Sparkles className="w-3.5 h-3.5" />
+          Live scan summary
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-white/70">
+          <div>Table: <span className="text-white/90">{scan.table_fqn ?? 'unknown'}</span></div>
+          <div>Risk: <span className="text-white/90">{scan.risk_level ?? 'unknown'}</span></div>
+          <div>Carbon saved: <span className="text-white/90">{typeof scan.carbon_saved_kg === 'number' ? `${scan.carbon_saved_kg.toFixed(1)} kg CO₂` : 'n/a'}</span></div>
+          <div>Lineage impact: <span className="text-white/90">{scan.lineage_impact ? `${scan.lineage_impact.affected_dashboards ?? 0} dashboards / ${scan.lineage_impact.affected_models ?? 0} models` : 'n/a'}</span></div>
+        </div>
+        {scan.pdf_url && (
+          <a
+            href={scan.pdf_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-brand-cyan/20 text-brand-cyan hover:bg-brand-cyan/10 transition-all"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Open latest PDF
+          </a>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -149,6 +212,7 @@ export default function ChatAgent() {
                 ) : (
                   <p className="text-sm">{msg.content}</p>
                 )}
+                {msg.role === 'agent' && renderScanSummary(msg.scan_result)}
                 {msg.role === 'agent' && msg.report_id && (
                   <a
                     href={api.downloadLatestReportUrl()}
@@ -220,6 +284,70 @@ export default function ChatAgent() {
           </button>
         </div>
       </form>
+
+      <div className="px-4 sm:px-6 pb-4">
+        <div className="max-w-3xl mx-auto rounded-2xl border border-white/5 bg-white/[0.02] p-4 sm:p-5 space-y-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-white/85">
+            <Upload className="w-4 h-4 text-brand-cyan" />
+            Upload & validate a dataset
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-[1.2fr_1fr_auto] gap-3 items-end">
+            <label className="block">
+              <span className="block text-xs text-white/35 mb-2">CSV or Parquet file</span>
+              <input
+                type="file"
+                accept=".csv,.parquet"
+                onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                className="block w-full text-sm text-white/70 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-cyan file:px-3 file:py-2 file:text-black file:font-semibold hover:file:bg-brand-cyan/90"
+              />
+            </label>
+            <label className="block">
+              <span className="block text-xs text-white/35 mb-2">Table FQN</span>
+              <input
+                type="text"
+                value={uploadTableFqn}
+                onChange={(e) => setUploadTableFqn(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-white/10 bg-white/[0.03] text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-cyan/30"
+                placeholder="ecommerce.customer_churn_v3"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={handleUpload}
+              disabled={!selectedFile || scanLoading}
+              className="px-4 py-2.5 rounded-xl bg-brand-cyan text-black font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              {scanLoading ? 'Scanning…' : 'Upload & Scan'}
+            </button>
+          </div>
+          {uploadError && (
+            <div className="text-sm text-brand-amber flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              {uploadError}
+            </div>
+          )}
+          {latestScan && (
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+              <div className="rounded-xl border border-white/5 p-3 bg-white/[0.02]">
+                <div className="text-white/35 mb-1">Risk</div>
+                <div className="text-white font-semibold">{latestScan.risk_level ?? 'unknown'}</div>
+              </div>
+              <div className="rounded-xl border border-white/5 p-3 bg-white/[0.02]">
+                <div className="text-white/35 mb-1">Carbon saved</div>
+                <div className="text-white font-semibold">{typeof latestScan.carbon_saved_kg === 'number' ? `${latestScan.carbon_saved_kg.toFixed(1)} kg CO₂` : 'n/a'}</div>
+              </div>
+              <div className="rounded-xl border border-white/5 p-3 bg-white/[0.02]">
+                <div className="text-white/35 mb-1">Affected dashboards</div>
+                <div className="text-white font-semibold">{latestScan.lineage_impact?.affected_dashboards ?? 0}</div>
+              </div>
+              <div className="rounded-xl border border-white/5 p-3 bg-white/[0.02]">
+                <div className="text-white/35 mb-1">Affected models</div>
+                <div className="text-white font-semibold">{latestScan.lineage_impact?.affected_models ?? 0}</div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

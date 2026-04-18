@@ -4,6 +4,21 @@ export interface ChatResponse {
   response: string;
   risk_score: 'CRITICAL' | 'HIGH' | 'LOW' | 'APPROVED';
   report_id?: string;
+  scan_result?: ScanResultSummary | null;
+}
+
+export interface ScanResultSummary {
+  scan_id?: string;
+  table_fqn?: string;
+  risk_level?: string;
+  carbon_saved_kg?: number;
+  lineage_impact?: Record<string, number>;
+  validation_summary?: Record<string, unknown>;
+  drift_summary?: Record<string, unknown>;
+  anomaly_summary?: Record<string, unknown>;
+  pdf_path?: string | null;
+  pdf_url?: string | null;
+  openmetadata_task_id?: string | null;
 }
 
 export interface ValidationHistoryItem {
@@ -64,6 +79,30 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ message }),
     }),
+
+  validate: (body: { message: string; session_id?: string; dataset_path?: string; table_fqn?: string }) =>
+    fetchWithHandling<ChatResponse>('/api/validate', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  uploadAndScan: async (file: File, tableFqn: string, sessionId: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('table_fqn', tableFqn);
+    formData.append('session_id', sessionId);
+
+    const response = await fetch(`${API_BASE}/agent/upload-and-scan`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new ApiError(`Request failed with status ${response.status}`, response.status);
+    }
+
+    return response.json() as Promise<ScanResultSummary>;
+  },
 
   getHistory: () => 
     fetchWithHandling<ValidationHistoryItem[]>('/api/history'),

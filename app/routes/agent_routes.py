@@ -52,6 +52,13 @@ class FrontendChatRequest(BaseModel):
     dataset_path: str | None = None
 
 
+class FrontendValidateRequest(BaseModel):
+    message: str
+    session_id: str | None = None
+    dataset_path: str | None = None
+    table_fqn: str | None = None
+
+
 def _pdf_to_public_url(pdf_path: str | None) -> str | None:
     if not pdf_path:
         return None
@@ -92,6 +99,25 @@ def _build_llm_client() -> LLMClient:
     provider = settings.llm_provider.lower()
     api_key = key_map.get(provider, "")
     return LLMClient(provider=provider, api_key=api_key, model=settings.llm_model)
+
+
+def _scan_result_summary(scan_result: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not scan_result:
+        return None
+
+    return {
+        "scan_id": scan_result.get("scan_id"),
+        "table_fqn": scan_result.get("table_fqn"),
+        "risk_level": scan_result.get("risk_level"),
+        "carbon_saved_kg": scan_result.get("carbon_saved_kg", 0.0),
+        "lineage_impact": scan_result.get("lineage_impact", {}),
+        "validation_summary": scan_result.get("validation_summary", {}),
+        "drift_summary": scan_result.get("drift_summary", {}),
+        "anomaly_summary": scan_result.get("anomaly_summary", {}),
+        "pdf_path": scan_result.get("pdf_path"),
+        "pdf_url": _pdf_to_public_url(scan_result.get("pdf_path")),
+        "openmetadata_task_id": scan_result.get("openmetadata_task_id"),
+    }
 
 
 def _get_agent(session_id: str) -> VerdaxAgent:
@@ -236,8 +262,27 @@ async def frontend_health() -> dict[str, Any]:
     return {"status": "ok", "openmetadata_connected": openmetadata_connected}
 
 
-@api_router.post("/chat")
-async def frontend_chat(body: FrontendChatRequest) -> dict[str, Any]:
+def _frontend_response_map(agent: VerdaxAgent, full_text: str) -> dict[str, Any]:
+    scan_result = agent.last_execution_context.get("scan_result") or {}
+    result_map = agent.last_execution_context.get("results") or {}
+    if scan_result:
+        try:
+            session_store.save_scan_result(scan_result)
+        except Exception:
+            pass
+
+    pdf_path = scan_result.get("pdf_path") if isinstance(scan_result, dict) else None
+    report_id = Path(str(pdf_path)).name if pdf_path else None
+
+    return {
+        "response": full_text.strip(),
+        "risk_score": _map_risk_for_frontend(result_map.get("calculate_risk") if isinstance(result_map, dict) else None),
+        "report_id": report_id,
+        "scan_result": _scan_result_summary(scan_result if isinstance(scan_result, dict) else None),
+    }
+
+
+async def _run_frontend_chat(body: FrontendChatRequest) -> dict[str, Any]:
     session_id = body.session_id or "frontend-default"
     agent = _get_agent(session_id)
     session_store.add_message(session_id, "user", body.message)
@@ -253,27 +298,27 @@ async def frontend_chat(body: FrontendChatRequest) -> dict[str, Any]:
             "response": safe_error,
             "risk_score": "LOW",
             "report_id": None,
+            "scan_result": None,
         }
 
     session_store.add_message(session_id, "assistant", full_text)
+    return _frontend_response_map(agent, full_text)
 
-    scan_result = agent.last_execution_context.get("scan_result") or {}
-    result_map = agent.last_execution_context.get("results") or {}
-    if scan_result:
-        try:
-            session_store.save_scan_result(scan_result)
-        except Exception:
-            # Keep chat responsive when scan persistence backend is unavailable.
-            pass
 
-    pdf_path = scan_result.get("pdf_path") if isinstance(scan_result, dict) else None
-    report_id = Path(str(pdf_path)).name if pdf_path else None
+@api_router.post("/chat")
+async def frontend_chat(body: FrontendChatRequest) -> dict[str, Any]:
+    return await _run_frontend_chat(body)
 
-    return {
-        "response": full_text.strip(),
-        "risk_score": _map_risk_for_frontend(result_map.get("calculate_risk") if isinstance(result_map, dict) else None),
-        "report_id": report_id,
-    }
+
+@api_router.post("/validate")
+async def frontend_validate(body: FrontendValidateRequest) -> dict[str, Any]:
+    chat_body = FrontendChatRequest(message=body.message, session_id=body.session_id, dataset_path=body.dataset_path)
+    result = await _run_frontend_chat(chat_body)
+    if body.table_fqn:
+        scan_result = result.get("scan_result") or {}
+        scan_result["table_fqn"] = body.table_fqn
+        result["scan_result"] = scan_result
+    return result
 
 
 @api_router.get("/history")

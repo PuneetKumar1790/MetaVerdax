@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
 
     # MetaVerdax
+    api_base_url: str = "http://127.0.0.1:8000"
     max_upload_size_mb: int = 100
     temp_upload_dir: str = "/tmp/verdax_uploads"
     reports_dir: str = "reports/agent"
@@ -34,7 +35,11 @@ class Settings(BaseSettings):
     warn_drift_threshold: float = 0.2
     critical_anomaly_rate: float = 0.15
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 settings = Settings()

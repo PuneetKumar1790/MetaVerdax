@@ -375,6 +375,11 @@ class VerdaxAgent:
             }
         )
 
+        if normalized["intent"] in {"validate_dataset", "generate_report", "show_drift"}:
+            table_fqn = normalized["entities"].get("table_fqn")
+            if not table_fqn or "." not in str(table_fqn):
+                normalized["entities"]["table_fqn"] = "ecommerce.customer_churn_v3"
+
         actions = [str(a) for a in plan.get("actions", []) if isinstance(a, str)]
         if not actions:
             actions = self._heuristic_plan(str(plan)).get("actions", [])
@@ -440,6 +445,10 @@ class VerdaxAgent:
             "days": 7,
             "assignee": None,
         }
+        if intent in {"validate_dataset", "generate_report", "show_drift"}:
+            table_fqn = entities.get("table_fqn")
+            if not table_fqn or "." not in str(table_fqn):
+                entities["table_fqn"] = "ecommerce.customer_churn_v3"
         return {"intent": intent, "entities": entities, "actions": actions}
 
     @staticmethod
