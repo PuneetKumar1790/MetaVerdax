@@ -4,7 +4,16 @@ __pycache__/
 .pytest_cache/
 *.db
 
+# Frontend dependencies/build output
+frontend/node_modules/
+frontend/dist/
+
+# Generated screenshots and local artifacts
+screenshots/
+.streamlit/
+
 # Generated runtime artifacts
 reports/agent/*.pdf
 reports/agent/*.summary.json
 meta_verdax_sessions.db
+verdax.db

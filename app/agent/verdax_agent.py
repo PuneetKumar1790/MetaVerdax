@@ -1,4 +1,4 @@
-"""MetaVerdax agent orchestration: LLM planning + MCP + MetaVerdax runtime."""
+"""MetaVerdax agent orchestration: LLM planning + MCP + Verdax runtime."""
 
 from __future__ import annotations
 
@@ -14,8 +14,6 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
 
 from app.config.settings import settings
 from app.mcp_client import OpenMetadataMCPClient
@@ -24,11 +22,12 @@ VERDAX_REFERENCE_ROOT = os.getenv("VERDAX_REFERENCE_ROOT", "/data/We_Make_Devs/V
 if VERDAX_REFERENCE_ROOT not in sys.path:
     sys.path.insert(0, VERDAX_REFERENCE_ROOT)
 
-# Import existing MetaVerdax components as-is.
+# Import existing Verdax components as-is.
 from core.anomaly_scorer import AnomalyScorer  # type: ignore
 from core.carbon_calculator import CarbonCalculator  # type: ignore
 from core.drift_detector import DriftDetector  # type: ignore
 from core.validator import DataValidator  # type: ignore
+from dashboard.report_generator import ReportGenerator  # type: ignore
 
 
 @dataclass
@@ -39,8 +38,8 @@ class PlanEntities:
     assignee: str | None = None
 
 
-class MetaVerdaxAgent:
-    """Agent that plans actions with LLM and executes MCP + MetaVerdax workflows."""
+class VerdaxAgent:
+    """Agent that plans actions with LLM and executes MCP + Verdax workflows."""
 
     def __init__(self, mcp_client: OpenMetadataMCPClient, llm_client: Any, model: str):
         self.mcp = mcp_client
@@ -105,51 +104,50 @@ class MetaVerdaxAgent:
         resolved_dataset_path = dataset_path or entities.get("dataset_path")
 
         for action in plan.get("actions", []):
-            if action == "get_table_metadata" and table_fqn:
-                context["results"][action] = await self.mcp.get_table_metadata(table_fqn)
-            elif action == "get_column_profile" and table_fqn:
-                context["results"][action] = await self.mcp.get_column_profile(table_fqn)
-            elif action == "get_lineage" and table_fqn:
-                context["results"][action] = await self.mcp.get_lineage(table_fqn)
-            elif action == "list_drift_tables":
-                context["results"][action] = await self.mcp.list_tables_with_drift(days=int(entities.get("days", 7)))
-            elif action == "run_validation":
-                context["results"][action] = await self._run_validation(
-                    table_fqn=table_fqn,
-                    dataset_path=resolved_dataset_path,
-                    table_metadata=context["results"].get("get_table_metadata"),
-                )
-            elif action == "calculate_risk":
-                validation = context["results"].get("run_validation", {}).get("validation", {})
-                drift = context["results"].get("run_validation", {}).get("drift", {})
-                anomaly = context["results"].get("run_validation", {}).get("anomaly", {})
-                context["results"][action] = self._calculate_risk(validation, drift, anomaly)
-            elif action == "calculate_carbon":
-                risk_level = context["results"].get("calculate_risk", "SAFE")
-                context["results"][action] = await self._calculate_carbon(risk_level)
-            elif action == "generate_pdf":
-                context["results"][action] = await self._generate_pdf(
-                    context=context,
-                    table_fqn=table_fqn,
-                    dataset_path=resolved_dataset_path,
-                )
-            elif action == "push_observation" and table_fqn:
-                observation = self._build_observation_payload(context)
-                context["results"][action] = await self.mcp.push_observation(table_fqn, observation)
-            elif action == "create_task" and table_fqn:
-                risk_level = context["results"].get("calculate_risk", "SAFE")
-                if risk_level in {"REVIEW", "CRITICAL"}:
-                    context["results"][action] = await self.mcp.create_task(
-                        fqn=table_fqn,
-                        title=f"MetaVerdax {risk_level} risk detected",
-                        description=self._task_description(context),
-                        assignee=entities.get("assignee"),
+            try:
+                if action == "get_table_metadata" and table_fqn:
+                    context["results"][action] = await self.mcp.get_table_metadata(table_fqn)
+                elif action == "get_column_profile" and table_fqn:
+                    context["results"][action] = await self.mcp.get_column_profile(table_fqn)
+                elif action == "get_lineage" and table_fqn:
+                    context["results"][action] = await self.mcp.get_lineage(table_fqn)
+                elif action == "list_drift_tables":
+                    context["results"][action] = await self.mcp.list_tables_with_drift(days=int(entities.get("days", 7)))
+                elif action == "run_validation":
+                    context["results"][action] = await self._run_validation(
+                        table_fqn=table_fqn,
+                        dataset_path=resolved_dataset_path,
+                        table_metadata=context["results"].get("get_table_metadata"),
                     )
-                else:
-                    context["results"][action] = {"status": "skipped", "reason": "risk below REVIEW"}
-            elif action == "tag_entity" and table_fqn:
-                risk_level = context["results"].get("calculate_risk", "SAFE")
-                context["results"][action] = await self.mcp.tag_entity(table_fqn, [f"MetaVerdaxRisk.{risk_level}"])
+                elif action == "calculate_risk":
+                    validation = context["results"].get("run_validation", {}).get("validation", {})
+                    drift = context["results"].get("run_validation", {}).get("drift", {})
+                    anomaly = context["results"].get("run_validation", {}).get("anomaly", {})
+                    context["results"][action] = self._calculate_risk(validation, drift, anomaly)
+                elif action == "calculate_carbon":
+                    risk_level = context["results"].get("calculate_risk", "SAFE")
+                    context["results"][action] = await self._calculate_carbon(risk_level)
+                elif action == "generate_pdf":
+                    context["results"][action] = await self._generate_pdf()
+                elif action == "push_observation" and table_fqn:
+                    observation = self._build_observation_payload(context)
+                    context["results"][action] = await self.mcp.push_observation(table_fqn, observation)
+                elif action == "create_task" and table_fqn:
+                    risk_level = context["results"].get("calculate_risk", "SAFE")
+                    if risk_level in {"REVIEW", "CRITICAL"}:
+                        context["results"][action] = await self.mcp.create_task(
+                            fqn=table_fqn,
+                            title=f"MetaVerdax {risk_level} risk detected",
+                            description=self._task_description(context),
+                            assignee=entities.get("assignee"),
+                        )
+                    else:
+                        context["results"][action] = {"status": "skipped", "reason": "risk below REVIEW"}
+                elif action == "tag_entity" and table_fqn:
+                    risk_level = context["results"].get("calculate_risk", "SAFE")
+                    context["results"][action] = await self.mcp.tag_entity(table_fqn, [f"VerdaxRisk.{risk_level}"])
+            except Exception as exc:
+                context["results"][action] = {"status": "error", "error": str(exc)}
 
         context["scan_result"] = self._build_scan_result(context, table_fqn=table_fqn, dataset_path=resolved_dataset_path)
         return context
@@ -266,78 +264,19 @@ class MetaVerdaxAgent:
         )
         return result.model_dump()
 
-    async def _generate_pdf(
-        self,
-        context: dict[str, Any],
-        table_fqn: str | None,
-        dataset_path: str | None,
-    ) -> dict[str, Any]:
+    async def _generate_pdf(self) -> dict[str, Any]:
         Path(settings.reports_dir).mkdir(parents=True, exist_ok=True)
         file_name = f"meta_verdax_audit_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.pdf"
         output_path = str(Path(settings.reports_dir) / file_name)
-
-        validation = context["results"].get("run_validation", {}).get("validation", {})
-        drift = context["results"].get("run_validation", {}).get("drift", {})
-        anomaly = context["results"].get("run_validation", {}).get("anomaly", {})
-        carbon = context["results"].get("calculate_carbon", {})
-        risk = context["results"].get("calculate_risk", "SAFE")
-        lineage = context["results"].get("get_lineage", {})
-
-        def _build_pdf() -> str:
-            p = canvas.Canvas(output_path, pagesize=A4)
-            width, height = A4
-            y = height - 48
-
-            # Brand header (text-only) avoids leaking legacy Verdax artwork in generated reports.
-            p.setFont("Helvetica-Bold", 22)
-            p.drawString(40, y, "MetaVerdax")
-            y -= 22
-            p.setFont("Helvetica", 12)
-            p.drawString(40, y, "Governance and Sustainability Impact Report")
-            y -= 26
-
-            p.setFont("Helvetica", 10)
-            p.drawString(40, y, f"Generated (UTC): {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')}")
-            y -= 14
-            p.drawString(40, y, f"Table: {table_fqn or 'unknown'}")
-            y -= 14
-            p.drawString(40, y, f"Dataset: {dataset_path or 'N/A'}")
-            y -= 24
-
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(40, y, "Risk Summary")
-            y -= 16
-            p.setFont("Helvetica", 10)
-            p.drawString(40, y, f"Risk Level: {risk}")
-            y -= 14
-            p.drawString(40, y, f"Critical Failures: {validation.get('critical_failures', 0)}")
-            y -= 14
-            p.drawString(40, y, f"Warnings: {validation.get('warnings', 0)}")
-            y -= 14
-            p.drawString(40, y, f"Drift Score: {drift.get('drift_score', 0.0)}")
-            y -= 14
-            p.drawString(40, y, f"Anomaly Rate: {anomaly.get('anomaly_rate', 0.0)}")
-            y -= 22
-
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(40, y, "Lineage Impact")
-            y -= 16
-            p.setFont("Helvetica", 10)
-            p.drawString(40, y, f"Affected Dashboards: {int(lineage.get('affected_dashboards', 0))}")
-            y -= 14
-            p.drawString(40, y, f"Affected Models: {int(lineage.get('affected_models', 0))}")
-            y -= 22
-
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(40, y, "Sustainability")
-            y -= 16
-            p.setFont("Helvetica", 10)
-            p.drawString(40, y, f"CO2 Saved (kg): {float(carbon.get('co2_saved_kg', 0.0)):.2f}")
-
-            p.save()
-            return output_path
-
-        generated_path = await asyncio.to_thread(_build_pdf)
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        generator = ReportGenerator()
+        generated_path = await asyncio.to_thread(
+            generator.generate,
+            start_date=today,
+            end_date=today,
+            company_name="MetaVerdax",
+            output_path=output_path,
+        )
         return {"pdf_path": generated_path}
 
     def _build_scan_result(self, context: dict[str, Any], table_fqn: str | None, dataset_path: str | None) -> dict[str, Any]:
@@ -528,3 +467,7 @@ class MetaVerdaxAgent:
         if t in {"boolean", "bool"}:
             return "bool"
         return "object"
+
+
+# Backward-compatible symbol used by routes/tests.
+MetaVerdaxAgent = VerdaxAgent

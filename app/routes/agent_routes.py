@@ -10,18 +10,19 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.agent.session_store import SessionStore
-from app.agent.verdax_agent import MetaVerdaxAgent
+from app.agent.verdax_agent import VerdaxAgent
 from app.config.settings import settings
 from app.llm.client import LLMClient
 from app.mcp_client import OpenMetadataMCPClient
 
 router = APIRouter(prefix="/agent", tags=["agent"])
+api_router = APIRouter(prefix="/api", tags=["frontend"])
 session_store = SessionStore()
-agents: dict[str, MetaVerdaxAgent] = {}
+agents: dict[str, VerdaxAgent] = {}
 
 
 class ChatRequest(BaseModel):
@@ -45,6 +46,43 @@ class ScanResult(BaseModel):
     lineage_impact: dict
 
 
+class FrontendChatRequest(BaseModel):
+    message: str
+    session_id: str | None = None
+    dataset_path: str | None = None
+
+
+def _pdf_to_public_url(pdf_path: str | None) -> str | None:
+    if not pdf_path:
+        return None
+
+    reports_root = Path(settings.reports_dir).resolve().parent
+    candidate = Path(pdf_path)
+    if not candidate.is_absolute():
+        candidate = (Path.cwd() / candidate).resolve()
+
+    try:
+        relative = candidate.relative_to(reports_root)
+    except ValueError:
+        return None
+
+    return f"/reports/{relative.as_posix()}"
+
+
+def _map_risk_for_frontend(risk_level: str | None) -> Literal["CRITICAL", "HIGH", "LOW", "APPROVED"]:
+    if not risk_level:
+        return "LOW"
+
+    risk = risk_level.upper()
+    if risk == "CRITICAL":
+        return "CRITICAL"
+    if risk in {"REVIEW", "WARN"}:
+        return "HIGH"
+    if risk == "SAFE":
+        return "APPROVED"
+    return "LOW"
+
+
 def _build_llm_client() -> LLMClient:
     key_map = {
         "groq": settings.groq_api_key,
@@ -56,7 +94,7 @@ def _build_llm_client() -> LLMClient:
     return LLMClient(provider=provider, api_key=api_key, model=settings.llm_model)
 
 
-def _get_agent(session_id: str) -> MetaVerdaxAgent:
+def _get_agent(session_id: str) -> VerdaxAgent:
     if session_id in agents:
         return agents[session_id]
 
@@ -64,7 +102,7 @@ def _get_agent(session_id: str) -> MetaVerdaxAgent:
         base_url=f"{settings.openmetadata_url.rstrip('/')}{settings.mcp_endpoint}",
         token=settings.openmetadata_token,
     )
-    agent = MetaVerdaxAgent(mcp_client=mcp_client, llm_client=_build_llm_client(), model=settings.llm_model)
+    agent = VerdaxAgent(mcp_client=mcp_client, llm_client=_build_llm_client(), model=settings.llm_model)
 
     existing_history = session_store.get_history(session_id)
     if existing_history:
@@ -180,3 +218,122 @@ async def get_blocked_retrains() -> dict[str, Any]:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to read blocked retrains: {exc}") from exc
     return {"count": len(rows), "results": rows}
+
+
+@api_router.get("/health")
+async def frontend_health() -> dict[str, Any]:
+    mcp_client = OpenMetadataMCPClient(
+        base_url=f"{settings.openmetadata_url.rstrip('/')}{settings.mcp_endpoint}",
+        token=settings.openmetadata_token,
+    )
+
+    openmetadata_connected = True
+    try:
+        await mcp_client.list_tools()
+    except Exception:
+        openmetadata_connected = False
+
+    return {"status": "ok", "openmetadata_connected": openmetadata_connected}
+
+
+@api_router.post("/chat")
+async def frontend_chat(body: FrontendChatRequest) -> dict[str, Any]:
+    session_id = body.session_id or "frontend-default"
+    agent = _get_agent(session_id)
+    session_store.add_message(session_id, "user", body.message)
+
+    full_text = ""
+    try:
+        async for token in agent.run(body.message, dataset_path=body.dataset_path):
+            full_text += token
+    except Exception as exc:
+        safe_error = f"Unable to complete this request right now: {exc}"
+        session_store.add_message(session_id, "assistant", safe_error)
+        return {
+            "response": safe_error,
+            "risk_score": "LOW",
+            "report_id": None,
+        }
+
+    session_store.add_message(session_id, "assistant", full_text)
+
+    scan_result = agent.last_execution_context.get("scan_result") or {}
+    result_map = agent.last_execution_context.get("results") or {}
+    if scan_result:
+        try:
+            session_store.save_scan_result(scan_result)
+        except Exception:
+            # Keep chat responsive when scan persistence backend is unavailable.
+            pass
+
+    pdf_path = scan_result.get("pdf_path") if isinstance(scan_result, dict) else None
+    report_id = Path(str(pdf_path)).name if pdf_path else None
+
+    return {
+        "response": full_text.strip(),
+        "risk_score": _map_risk_for_frontend(result_map.get("calculate_risk") if isinstance(result_map, dict) else None),
+        "report_id": report_id,
+    }
+
+
+@api_router.get("/history")
+async def frontend_history() -> list[dict[str, Any]]:
+    try:
+        rows = session_store.get_recent_scan_results(limit=50)
+    except Exception:
+        return []
+
+    history: list[dict[str, Any]] = []
+    for row in rows:
+        risk_level = str(row.get("risk_level", "SAFE"))
+        history.append(
+            {
+                "id": str(row.get("scan_id") or row.get("timestamp") or os.urandom(4).hex()),
+                "dataset": Path(str(row.get("dataset_path") or "unknown")).name,
+                "risk_score": risk_level,
+                "timestamp": str(row.get("timestamp") or ""),
+                "action": "Blocked retrain" if risk_level in {"CRITICAL", "REVIEW"} else "Approved retrain",
+                "report_url": _pdf_to_public_url(row.get("pdf_path")),
+            }
+        )
+
+    return history
+
+
+@api_router.get("/reports")
+async def frontend_reports() -> list[dict[str, Any]]:
+    try:
+        rows = session_store.get_recent_scan_results(limit=100)
+    except Exception:
+        return []
+
+    reports: list[dict[str, Any]] = []
+    for row in rows:
+        pdf_path = row.get("pdf_path")
+        public_url = _pdf_to_public_url(pdf_path)
+        if not public_url:
+            continue
+
+        filename = Path(str(pdf_path)).name
+        reports.append(
+            {
+                "id": str(row.get("scan_id") or filename),
+                "filename": filename,
+                "dataset": Path(str(row.get("dataset_path") or "unknown")).name,
+                "created_at": str(row.get("timestamp") or ""),
+                "download_url": public_url,
+            }
+        )
+
+    return reports
+
+
+@api_router.get("/report/latest")
+async def frontend_latest_report() -> FileResponse:
+    reports_dir = Path(settings.reports_dir)
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    candidates = sorted(reports_dir.glob("*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not candidates:
+        raise HTTPException(status_code=404, detail="No reports available")
+    latest = candidates[0]
+    return FileResponse(path=str(latest), filename=latest.name, media_type="application/pdf")

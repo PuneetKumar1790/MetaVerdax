@@ -60,6 +60,36 @@
     {
       "label": "MetaVerdax: Start Frontend",
       "type": "shell",
+      "command": "npm",
+      "args": ["--prefix", "frontend", "run", "dev", "--", "--host", "127.0.0.1", "--port", "5173"],
+      "options": {
+        "env": {
+          "VITE_API_BASE_URL": "http://127.0.0.1:8000"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "custom",
+        "pattern": [
+          {
+            "regexp": ".*"
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "VITE",
+          "endsPattern": "Local:   http://127.0.0.1:5173/|Local:   http://localhost:5173/"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "MetaVerdax"
+      }
+    },
+    {
+      "label": "MetaVerdax: Start Streamlit Dashboard",
+      "type": "shell",
       "command": "/data/We_Make_Devs/MetaVerdax/.venv/bin/python",
       "args": ["-m", "streamlit", "run", "dashboard/agent_app.py", "--server.headless", "true", "--server.port", "8501"],
       "options": {

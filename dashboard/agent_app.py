@@ -41,47 +41,151 @@ def _find_logo_file() -> Path | None:
     return None
 
 
+def _find_logo_files() -> dict[str, Path | None]:
+    """Return both brand assets if available."""
+    root = Path(__file__).resolve().parents[1]
+    logo_dir = root / "logo"
+    return {
+        "brand_name": logo_dir / "brand_name.png" if (logo_dir / "brand_name.png").exists() else None,
+        "logo_mark": logo_dir / "metaverdax_logo_design_on_black.png"
+        if (logo_dir / "metaverdax_logo_design_on_black.png").exists()
+        else None,
+    }
+
+
+def _get_app_mode() -> str:
+    """Read current view mode from query params/session state."""
+    try:
+        qp = st.query_params.get("view")
+        if isinstance(qp, list):
+            qp = qp[0] if qp else None
+        if qp in {"landing", "prototype"}:
+            return str(qp)
+    except Exception:
+        pass
+    return str(st.session_state.get("app_mode", "landing"))
+
+
+def _set_app_mode(mode: str) -> None:
+    """Persist view mode in session and query params."""
+    st.session_state["app_mode"] = mode
+    try:
+        st.query_params["view"] = mode
+    except Exception:
+        pass
+
+
 def _inject_css() -> None:
     st.markdown(
         """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
 
 :root {
-  --bg: #0A0A0F;
-  --panel: #12121A;
-  --panel2: #181824;
-  --accent: #00FF88;
-  --critical: #FF3B3B;
-  --warn: #FFB800;
-  --safe: #00C9FF;
-  --text: #EAF2F5;
-  --muted: #95A3AD;
+    --bg: #0a0f16;
+    --bg2: #0f1624;
+    --panel: #111827;
+    --panel2: #182235;
+    --accent: #22c55e;
+    --critical: #ef4444;
+    --warn: #f59e0b;
+    --safe: #38bdf8;
+    --text: #e5eef7;
+    --muted: #91a4b7;
 }
 
 html, body, [data-testid="stAppViewContainer"] {
   background:
-    radial-gradient(circle at 20% 20%, rgba(0,255,136,0.08), transparent 36%),
-    radial-gradient(circle at 80% 10%, rgba(0,201,255,0.08), transparent 30%),
-    linear-gradient(170deg, #0A0A0F 0%, #11111B 100%);
+        radial-gradient(circle at 20% 15%, rgba(34,197,94,0.11), transparent 32%),
+        radial-gradient(circle at 80% 10%, rgba(56,189,248,0.10), transparent 28%),
+        linear-gradient(170deg, var(--bg) 0%, var(--bg2) 100%);
   color: var(--text);
-  font-family: 'Space Grotesk', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 
-h1, h2, h3 { color: var(--text) !important; letter-spacing: 0.3px; }
+h1, h2, h3 { color: var(--text) !important; letter-spacing: 0.2px; }
+
+header[data-testid="stHeader"] {
+    background: transparent;
+}
+
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0e1420 0%, #111827 100%);
+    border-right: 1px solid rgba(255,255,255,0.06);
+}
+
+section[data-testid="stSidebar"] .stMarkdown,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] p {
+    color: #dbe6f1 !important;
+}
 
 [data-testid="stSidebar"] {
-  background: linear-gradient(170deg, #0E0E16 0%, #121220 100%);
-  border-right: 1px solid rgba(255,255,255,0.05);
+    padding-top: 0.25rem;
 }
 
 .metric, .mono, code {
   font-family: 'JetBrains Mono', monospace !important;
 }
 
+div[data-testid="metric-container"] {
+    background: linear-gradient(145deg, rgba(17,24,39,0.94), rgba(24,34,53,0.92));
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.16);
+}
+
+div[data-testid="metric-container"] label {
+    color: #9fb2c7 !important;
+    font-weight: 600 !important;
+}
+
+div[data-testid="metric-container"] [data-testid="stMetricValue"] {
+    color: #f8fbff !important;
+    font-weight: 800 !important;
+}
+
+.stTabs [data-baseweb="tab-list"] {
+    gap: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.10);
+}
+
+.stTabs [data-baseweb="tab"] {
+    border-radius: 999px;
+    padding: 8px 18px;
+    font-weight: 700;
+    color: #b4c4d6;
+}
+
+.stTabs [aria-selected="true"] {
+    color: #ffffff !important;
+    background: rgba(34,197,94,0.10);
+}
+
+button[kind="secondary"], .stButton > button {
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: linear-gradient(145deg, rgba(24,34,53,0.98), rgba(17,24,39,0.98));
+    color: #f6fbff;
+}
+
+.hero {
+    padding: 10px 0 6px;
+}
+
+.hero h1 {
+    margin-bottom: 0.15rem;
+}
+
+.hero p {
+    color: var(--muted);
+    margin-top: 0;
+}
+
 .chat-user {
   margin-left: 18%;
-  background: linear-gradient(135deg, #20202C, #2A2A39);
+    background: linear-gradient(135deg, #202a3a, #2b3548);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 14px;
   padding: 10px 14px;
@@ -91,8 +195,8 @@ h1, h2, h3 { color: var(--text) !important; letter-spacing: 0.3px; }
 
 .chat-agent {
   margin-right: 18%;
-  background: linear-gradient(135deg, #10161A, #0E1E1A);
-  border: 1px solid rgba(0,255,136,0.25);
+    background: linear-gradient(135deg, #0f1724, #0f221d);
+    border: 1px solid rgba(34,197,94,0.22);
   border-radius: 14px;
   padding: 10px 14px;
   color: #D8FFE8;
@@ -100,14 +204,185 @@ h1, h2, h3 { color: var(--text) !important; letter-spacing: 0.3px; }
 }
 
 .risk-card {
-  border: 1px solid rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.10);
   border-radius: 16px;
-  background: linear-gradient(140deg, #13131D, #0F1720);
+    background: linear-gradient(140deg, rgba(15,23,32,0.96), rgba(10,18,26,0.96));
   padding: 16px;
   margin-top: 14px;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.16);
+}
+
+.brand-title {
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    color: #f7fbff;
+    margin-top: 0.5rem;
+}
+
+.brand-tagline {
+    color: #8ea1b5;
+    font-size: 0.92rem;
+    margin-top: -0.15rem;
+}
+
+.sidebar-divider {
+    border-top: 1px solid rgba(255,255,255,0.08);
+    margin: 0.8rem 0 1rem;
+}
+
+.sidebar-chip {
+    display: inline-block;
+    margin: 0.1rem 0.35rem 0.1rem 0;
+    padding: 0.3rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(255,255,255,0.03);
+    color: #cfe0f0;
+    font-size: 0.76rem;
 }
 
 .dot { font-size: 10px; vertical-align: middle; margin-right: 6px; }
+
+.section-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #f7fbff;
+    margin-bottom: 0.2rem;
+}
+
+.section-subtitle {
+    color: var(--muted);
+    margin-top: 0;
+}
+
+.landing-wrap {
+    margin: 0.2rem 0 1.2rem;
+}
+
+.hero-panel {
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 24px;
+    background:
+        radial-gradient(circle at 20% 20%, rgba(34,197,94,0.16), transparent 34%),
+        radial-gradient(circle at 75% 15%, rgba(56,189,248,0.14), transparent 30%),
+        linear-gradient(145deg, rgba(10,15,22,0.98), rgba(17,24,39,0.98));
+    box-shadow: 0 18px 44px rgba(0,0,0,0.24);
+    padding: 28px;
+}
+
+.hero-kicker {
+    display: inline-block;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid rgba(34,197,94,0.25);
+    background: rgba(34,197,94,0.08);
+    color: #bff5cd;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.8rem;
+}
+
+.hero-title {
+    font-size: clamp(2.2rem, 5vw, 4.3rem);
+    line-height: 1.02;
+    font-weight: 900;
+    color: #f8fbff;
+    margin: 0.2rem 0 0.6rem;
+}
+
+.hero-copy {
+    color: #b1c2d4;
+    font-size: 1.02rem;
+    line-height: 1.7;
+    max-width: 72ch;
+}
+
+.hero-chip-row { margin-top: 0.9rem; }
+
+.hero-chip {
+    display: inline-block;
+    margin: 0.2rem 0.4rem 0.2rem 0;
+    padding: 0.38rem 0.72rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.10);
+    color: #dce8f4;
+    font-size: 0.8rem;
+}
+
+.info-card {
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: linear-gradient(150deg, rgba(17,24,39,0.94), rgba(11,17,26,0.96));
+    padding: 18px;
+    box-shadow: 0 14px 28px rgba(0,0,0,0.16);
+    height: 100%;
+}
+
+.info-card h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.05rem;
+}
+
+.info-card p, .info-card li {
+    color: #bac8d8;
+    line-height: 1.6;
+}
+
+.value-stat {
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: linear-gradient(145deg, rgba(17,24,39,0.92), rgba(24,34,53,0.92));
+    padding: 16px;
+    text-align: left;
+    height: 100%;
+}
+
+.value-stat .big {
+    font-size: 1.55rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin-bottom: 0.2rem;
+}
+
+.value-stat .small {
+    color: #a7bbcd;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.workflow-step {
+    padding: 0.9rem 1rem;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+    min-height: 100%;
+}
+
+.workflow-step .step-no {
+    display: inline-block;
+    width: 30px;
+    height: 30px;
+    line-height: 30px;
+    border-radius: 50%;
+    text-align: center;
+    margin-bottom: 0.5rem;
+    font-weight: 800;
+    color: #0b1220;
+    background: linear-gradient(145deg, #86efac, #38bdf8);
+}
+
+.resource-pill {
+    display: inline-block;
+    margin: 0.2rem 0.35rem 0.2rem 0;
+    padding: 0.36rem 0.68rem;
+    border-radius: 999px;
+    background: rgba(34,197,94,0.10);
+    border: 1px solid rgba(34,197,94,0.18);
+    color: #d9ffe3;
+    font-size: 0.8rem;
+}
 
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(8px); }
@@ -142,6 +417,7 @@ def _ensure_state() -> None:
     st.session_state.setdefault("sessions", [])
     st.session_state.setdefault("messages", [])
     st.session_state.setdefault("last_scan", None)
+    st.session_state.setdefault("app_mode", "landing")
 
 
 def _new_session() -> None:
@@ -269,8 +545,218 @@ def _build_summary_pdf(scan_results: list[dict]) -> bytes:
     return buffer.read()
 
 
+def _render_landing_page() -> None:
+    logos = _find_logo_files()
+    st.markdown(
+        """
+<div class='landing-wrap'>
+  <div class='hero-panel'>
+    <div class='hero-kicker'>MCP Ecosystem · AI Agents · Data Governance</div>
+    <div class='hero-title'>MetaVerdax: turn metadata into a guardrail for every retrain.</div>
+    <div class='hero-copy'>
+      MetaVerdax converts natural-language intent into an AI governance workflow that reads OpenMetadata through MCP,
+      validates datasets against live metadata, detects drift and anomalies, blocks risky retrains, and writes audit-ready
+      evidence back to your data catalog.
+    </div>
+    <div class='hero-chip-row'>
+      <span class='hero-chip'>FastAPI backend</span>
+      <span class='hero-chip'>Streamlit premium UI</span>
+      <span class='hero-chip'>Groq / Gemini / Claude</span>
+      <span class='hero-chip'>OpenMetadata MCP</span>
+      <span class='hero-chip'>Verdax validation engine</span>
+      <span class='hero-chip'>Audit-ready PDFs</span>
+    </div>
+  </div>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    left, right = st.columns([1, 1])
+    with left:
+        if logos["logo_mark"] is not None:
+            st.image(str(logos["logo_mark"]), width=220)
+    with right:
+        if logos["brand_name"] is not None:
+            st.image(str(logos["brand_name"]), width=260)
+
+    launch_cols = st.columns([1, 1, 2])
+    with launch_cols[0]:
+        if st.button("Launch Prototype", type="primary", use_container_width=True):
+            _set_app_mode("prototype")
+            st.rerun()
+    with launch_cols[1]:
+        if st.button("See the Product", use_container_width=True):
+            _set_app_mode("prototype")
+            st.rerun()
+
+    st.markdown("### Why this matters")
+    st.markdown(
+        """
+MetaVerdax solves a costly loop: ML teams spend most of their time cleaning data, retrains waste GPU budget, and
+compliance teams struggle to prove governance. The product gives you a single decision point before a retrain happens.
+        """
+    )
+
+    s1, s2, s3, s4 = st.columns(4)
+    with s1:
+        st.markdown(
+            """
+<div class='value-stat'>
+  <div class='big'>60-80%</div>
+  <div class='small'>of a data scientist's time can be spent cleaning and validating data instead of building models.</div>
+</div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with s2:
+        st.markdown(
+            """
+<div class='value-stat'>
+  <div class='big'>$10k-$100k+</div>
+  <div class='small'>can be wasted on one bad retrain when bad data reaches a large model.</div>
+</div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with s3:
+        st.markdown(
+            """
+<div class='value-stat'>
+  <div class='big'>$110M</div>
+  <div class='small'>was lost by Unity Technologies in 2022 due to corrupted ML training data.</div>
+</div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with s4:
+        st.markdown(
+            """
+<div class='value-stat'>
+  <div class='big'>€35M</div>
+  <div class='small'>is the EU AI Act fine ceiling that makes governance and auditability non-negotiable.</div>
+</div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("### Who it is for")
+    p1, p2 = st.columns(2)
+    with p1:
+        st.markdown(
+            """
+<div class='info-card'>
+  <h3>ML Engineer / Data Scientist</h3>
+  <p>Triggers scans through chat, API, or CLI before retraining. Wants a fast risk score, exact failure reasons, and an automatic block when the data is unsafe.</p>
+</div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with p2:
+        st.markdown(
+            """
+<div class='info-card'>
+  <h3>Compliance Officer / CTO</h3>
+  <p>Never touches code. Opens a dashboard to review blocked retrains, downloadable PDF evidence, drift stats, lineage impact, and carbon savings for auditors and clients.</p>
+</div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("### What the agent actually does")
+    w1, w2, w3, w4 = st.columns(4)
+    steps = [
+        ("01", "Understands natural language like 'Is my dataset safe to retrain?'"),
+        ("02", "Reads schema, profiles, lineage, tests, owners, and glossary from OpenMetadata via MCP."),
+        ("03", "Runs Verdax checks: nulls, duplicates, ranges, chi-squared drift, Isolation Forest, and risk scoring."),
+        ("04", "Writes back tasks, tags, observations, and a PDF audit trail with CO2 impact."),
+    ]
+    for col, (no, text) in zip((w1, w2, w3, w4), steps):
+        with col:
+            st.markdown(
+                f"""
+<div class='workflow-step'>
+  <div class='step-no'>{no}</div>
+  <div>{text}</div>
+</div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("### Value delivered")
+    v1, v2, v3 = st.columns(3)
+    with v1:
+        st.markdown(
+            """
+<div class='info-card'>
+  <h3>Risk prevention</h3>
+  <p>Blocks or flags dangerous retrains before compute is burned and broken models are shipped.</p>
+</div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with v2:
+        st.markdown(
+            """
+<div class='info-card'>
+  <h3>Audit readiness</h3>
+  <p>Produces compliance evidence: timestamps, drift stats, lineage impact, ownership context, and PDF reports.</p>
+</div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with v3:
+        st.markdown(
+            """
+<div class='info-card'>
+  <h3>Carbon and ESG</h3>
+  <p>Shows CO2 saved by blocking bad retrains, making sustainability part of the governance story.</p>
+</div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("### Resources and stack")
+    st.markdown(
+        """
+<div>
+  <span class='resource-pill'>OpenMetadata</span>
+  <span class='resource-pill'>MCP</span>
+  <span class='resource-pill'>FastAPI</span>
+  <span class='resource-pill'>Streamlit</span>
+  <span class='resource-pill'>Groq / Gemini / Claude</span>
+  <span class='resource-pill'>Pandas</span>
+  <span class='resource-pill'>Scikit-learn</span>
+  <span class='resource-pill'>MongoDB</span>
+  <span class='resource-pill'>SQLite</span>
+  <span class='resource-pill'>ReportLab</span>
+  <span class='resource-pill'>Verdax validator, drift detector, anomaly scorer, carbon calculator, report generator</span>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("### Demo story")
+    st.markdown(
+        """
+1. Upload a poisoned customer churn CSV.
+2. Ask in plain English if the dataset is safe to retrain.
+3. Watch MetaVerdax read metadata, run Verdax checks, and label the risk.
+4. See the task created in OpenMetadata, the PDF report generated, and the blocked retrain evidence captured.
+        """
+    )
+
+
 def engineer_tab() -> None:
-    st.subheader("Engineer Chat Interface")
+    st.markdown(
+        """
+<div class='hero'>
+  <div class='section-title'>Engineer Chat Interface</div>
+  <div class='section-subtitle'>Ask about dataset safety, drift, and compliance actions from one place.</div>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     for msg in st.session_state["messages"]:
         if msg["role"] == "user":
@@ -309,7 +795,15 @@ def engineer_tab() -> None:
 
 
 def compliance_tab() -> None:
-    st.markdown("## Compliance & Governance Overview")
+    st.markdown(
+        """
+<div class='hero'>
+  <div class='section-title'>Compliance &amp; Governance Overview</div>
+  <div class='section-subtitle'>Review scan history, blocked retrains, and audit output.</div>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     try:
         scan_payload = _api_get("/agent/scan-results")
@@ -381,14 +875,36 @@ def compliance_tab() -> None:
 def sidebar() -> None:
     logo_path = _find_logo_file()
     if logo_path is not None:
-        st.sidebar.image(str(logo_path), use_container_width=True)
+        st.sidebar.image(str(logo_path), width=92)
 
-    st.sidebar.markdown("## MetaVerdax Agent")
+    st.sidebar.markdown("<div class='brand-title'>MetaVerdax</div>", unsafe_allow_html=True)
+    st.sidebar.markdown("<div class='brand-tagline'>AI-driven dataset safety and compliance control</div>", unsafe_allow_html=True)
+    st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
+
+    st.sidebar.markdown("<span class='sidebar-chip'>Engineer</span><span class='sidebar-chip'>Compliance</span><span class='sidebar-chip'>Audit</span>", unsafe_allow_html=True)
+
+    if _get_app_mode() != "prototype":
+        st.sidebar.markdown("### Landing page")
+        st.sidebar.caption("Open the full working prototype to chat, scan, and generate reports.")
+        if st.sidebar.button("Launch Prototype", use_container_width=True):
+            _set_app_mode("prototype")
+            st.rerun()
+        st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
+        st.sidebar.caption("Prototype controls appear after launch.")
+        return
 
     api_ok = _check_health(f"{API_BASE}/health")
     mcp_ok = _check_health(MCP_BASE)
+    st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
     st.sidebar.markdown(f"API Status: {_status_dot(api_ok)}", unsafe_allow_html=True)
     st.sidebar.markdown(f"MCP Status: {_status_dot(mcp_ok)}", unsafe_allow_html=True)
+
+    st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
+
+    if _get_app_mode() == "prototype":
+        if st.sidebar.button("← Back to Landing"):
+            _set_app_mode("landing")
+            st.rerun()
 
     st.sidebar.markdown("### Sessions")
     st.sidebar.code(st.session_state["session_id"], language=None)
@@ -421,12 +937,29 @@ def sidebar() -> None:
         except Exception as exc:
             st.sidebar.error(f"Upload scan failed: {exc}")
 
+    st.sidebar.markdown("<div class='sidebar-divider'></div>", unsafe_allow_html=True)
+    st.sidebar.caption("MetaVerdax UI aligned to the Verdax visual language.")
+
 
 def main() -> None:
     st.set_page_config(page_title="MetaVerdax Agent", page_icon="V", layout="wide")
     _inject_css()
     _ensure_state()
     sidebar()
+
+    if _get_app_mode() != "prototype":
+        _render_landing_page()
+        return
+
+    st.markdown(
+        """
+<div class='hero'>
+  <div class='section-title'>Main Prototype</div>
+  <div class='section-subtitle'>Chat with the agent, scan data, and review compliance evidence.</div>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     tab1, tab2 = st.tabs(["Engineer", "Compliance"])
     with tab1:
