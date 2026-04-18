@@ -88,37 +88,6 @@
       }
     },
     {
-      "label": "MetaVerdax: Start Streamlit Dashboard",
-      "type": "shell",
-      "command": "/data/We_Make_Devs/MetaVerdax/.venv/bin/python",
-      "args": ["-m", "streamlit", "run", "dashboard/agent_app.py", "--server.headless", "true", "--server.port", "8501"],
-      "options": {
-        "env": {
-          "API_BASE_URL": "http://127.0.0.1:8000",
-          "MCP_BASE_URL": "http://127.0.0.1:8586/mcp"
-        }
-      },
-      "isBackground": true,
-      "problemMatcher": {
-        "owner": "custom",
-        "pattern": [
-          {
-            "regexp": ".*"
-          }
-        ],
-        "background": {
-          "activeOnStart": true,
-          "beginsPattern": "You can now view your Streamlit app in your browser",
-          "endsPattern": "Local URL: http://localhost:8501|Network URL: http://.*:8501"
-        }
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "group": "MetaVerdax"
-      }
-    },
-    {
       "label": "MetaVerdax: Run Full Stack",
       "dependsOn": [
         "MetaVerdax: Start Mock MCP",

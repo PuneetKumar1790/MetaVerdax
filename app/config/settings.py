@@ -29,9 +29,6 @@ class Settings(BaseSettings):
     mongodb_db: str = "verdax"
     mongodb_scans_collection: str = "verdax_scans"
 
-    # App runtime
-    api_base_url: str = "http://localhost:8000"
-
     # Risk thresholds
     critical_drift_threshold: float = 0.8
     warn_drift_threshold: float = 0.2

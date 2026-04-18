@@ -10,7 +10,6 @@ frontend/dist/
 
 # Generated screenshots and local artifacts
 screenshots/
-.streamlit/
 
 # Generated runtime artifacts
 reports/agent/*.pdf

@@ -26,9 +26,7 @@ MetaVerdax provides an AI-agent layer over metadata + observability to prevent r
 ## What Is Implemented
 
 - FastAPI backend with streaming chat endpoint (SSE)
-- Streamlit dashboard with two views:
-  - Engineer chat and scan actions
-  - Compliance metrics, blocked retrains, export actions
+- React frontend (Vite + TypeScript) for chat, scans, and reporting views
 - MCP client for OpenMetadata (`/mcp`) with read + write actions
 - LLM abstraction layer (Groq, Gemini, Anthropic)
 - MetaVerdax runtime integration:
@@ -49,7 +47,7 @@ MetaVerdax provides an AI-agent layer over metadata + observability to prevent r
 User (Chat / Upload)
    |
    v
-Streamlit UI (dashboard/agent_app.py)
+React UI (frontend/)
    |
    v
 FastAPI API (app/main.py + app/routes/agent_routes.py)
@@ -83,9 +81,6 @@ app/
   mcp_client.py
   llm/client.py
   config/settings.py
-
-dashboard/
-  agent_app.py
 
 tests/
   test_agent.py
@@ -128,8 +123,6 @@ MONGODB_URI=mongodb://localhost:27017
 MONGODB_DB=verdax
 MONGODB_SCANS_COLLECTION=verdax_scans
 
-# Runtime
-API_BASE_URL=http://localhost:8000
 ```
 
 Optional environment variable for MetaVerdax module imports:
@@ -152,10 +145,11 @@ Start API:
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Start dashboard (new terminal):
+Start frontend (new terminal):
 
 ```bash
-streamlit run dashboard/agent_app.py
+npm --prefix frontend install
+npm --prefix frontend run dev -- --host 127.0.0.1 --port 5173
 ```
 
 ## Demo Mode (Synthetic Data + Mock MCP)
