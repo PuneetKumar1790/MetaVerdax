@@ -26,7 +26,7 @@ MetaVerdax provides an AI-agent layer over metadata + observability to prevent r
 ## What Is Implemented
 
 - FastAPI backend with streaming chat endpoint (SSE)
-- React frontend (Vite + TypeScript) for chat, scans, and reporting views
+- React frontend (Vite + TypeScript) for chat, uploads, scans, and reporting views
 - MCP client for OpenMetadata (`/mcp`) with read + write actions
 - LLM abstraction layer (Groq, Gemini, Anthropic)
 - MetaVerdax runtime integration:
@@ -35,6 +35,10 @@ MetaVerdax provides an AI-agent layer over metadata + observability to prevent r
   - anomaly scoring
   - carbon savings estimation
   - PDF report generation
+- Demo UI surfaces governance write-backs directly:
+  - observation, task, and tag chips
+  - live scan summary with lineage and carbon impact
+  - PDF report download link
 - Session history persistence (in-memory + SQLite)
 - Scan result persistence and compliance queries (MongoDB)
 - Demo tooling:
