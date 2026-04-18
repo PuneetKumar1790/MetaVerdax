@@ -16,6 +16,7 @@ export interface ScanResultSummary {
   validation_summary?: Record<string, unknown>;
   drift_summary?: Record<string, unknown>;
   anomaly_summary?: Record<string, unknown>;
+  governance_actions?: Record<string, unknown>;
   pdf_path?: string | null;
   pdf_url?: string | null;
   openmetadata_task_id?: string | null;

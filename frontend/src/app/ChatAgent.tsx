@@ -119,6 +119,7 @@ export default function ChatAgent() {
 
   const renderScanSummary = (scan?: ScanResultSummary | null) => {
     if (!scan) return null;
+    const governance = scan.governance_actions ?? {};
     return (
       <div className="mt-3 rounded-xl border border-brand-cyan/20 bg-brand-cyan/[0.04] p-3 text-xs text-white/75 space-y-2">
         <div className="flex items-center gap-2 text-brand-cyan font-semibold uppercase tracking-wider">
@@ -130,6 +131,20 @@ export default function ChatAgent() {
           <div>Risk: <span className="text-white/90">{scan.risk_level ?? 'unknown'}</span></div>
           <div>Carbon saved: <span className="text-white/90">{typeof scan.carbon_saved_kg === 'number' ? `${scan.carbon_saved_kg.toFixed(1)} kg CO₂` : 'n/a'}</span></div>
           <div>Lineage impact: <span className="text-white/90">{scan.lineage_impact ? `${scan.lineage_impact.affected_dashboards ?? 0} dashboards / ${scan.lineage_impact.affected_models ?? 0} models` : 'n/a'}</span></div>
+        </div>
+        <div className="space-y-1.5">
+          <div className="text-[10px] uppercase tracking-wider text-white/40">OpenMetadata write-back</div>
+          <div className="flex flex-wrap gap-2">
+            <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-white/75">
+              {governance.observation ? 'Observation logged' : 'Observation pending'}
+            </span>
+            <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-white/75">
+              {governance.task ? `Task ${String(governance.task).slice(0, 14)}` : 'Task pending'}
+            </span>
+            <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-white/75">
+              {governance.tag ? `Tag ${String(governance.tag)}` : 'Tag pending'}
+            </span>
+          </div>
         </div>
         {scan.pdf_url && (
           <a

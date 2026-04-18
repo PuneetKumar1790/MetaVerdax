@@ -41,6 +41,7 @@ class ScanResult(BaseModel):
     drift_summary: dict
     anomaly_summary: dict
     carbon_saved_kg: float
+    governance_actions: dict
     pdf_path: str | None
     openmetadata_task_id: str | None
     lineage_impact: dict
@@ -105,6 +106,8 @@ def _scan_result_summary(scan_result: dict[str, Any] | None) -> dict[str, Any] |
     if not scan_result:
         return None
 
+    governance_actions = scan_result.get("governance_actions", {}) if isinstance(scan_result, dict) else {}
+
     return {
         "scan_id": scan_result.get("scan_id"),
         "table_fqn": scan_result.get("table_fqn"),
@@ -114,6 +117,7 @@ def _scan_result_summary(scan_result: dict[str, Any] | None) -> dict[str, Any] |
         "validation_summary": scan_result.get("validation_summary", {}),
         "drift_summary": scan_result.get("drift_summary", {}),
         "anomaly_summary": scan_result.get("anomaly_summary", {}),
+        "governance_actions": governance_actions,
         "pdf_path": scan_result.get("pdf_path"),
         "pdf_url": _pdf_to_public_url(scan_result.get("pdf_path")),
         "openmetadata_task_id": scan_result.get("openmetadata_task_id"),

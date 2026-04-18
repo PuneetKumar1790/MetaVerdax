@@ -284,7 +284,9 @@ class VerdaxAgent:
         risk_level = context["results"].get("calculate_risk", "SAFE")
         carbon = context["results"].get("calculate_carbon", {})
         lineage = context["results"].get("get_lineage", {})
+        observation = context["results"].get("push_observation", {})
         task = context["results"].get("create_task", {})
+        tag = context["results"].get("tag_entity", {})
         pdf = context["results"].get("generate_pdf", {})
 
         lineage_impact = {
@@ -302,6 +304,13 @@ class VerdaxAgent:
             "drift_summary": run_validation.get("drift", {}),
             "anomaly_summary": run_validation.get("anomaly", {}),
             "carbon_saved_kg": float(carbon.get("co2_saved_kg", 0.0)),
+            "governance_actions": {
+                "observation": observation.get("observation_id") if isinstance(observation, dict) else None,
+                "task": task.get("id") if isinstance(task, dict) else None,
+                "tag": ",".join(tag.get("tags", [])) if isinstance(tag, dict) and isinstance(tag.get("tags"), list) else None,
+                "task_status": task.get("status") if isinstance(task, dict) else None,
+                "tag_status": tag.get("status") if isinstance(tag, dict) else None,
+            },
             "pdf_path": pdf.get("pdf_path"),
             "openmetadata_task_id": task.get("id") if isinstance(task, dict) else None,
             "lineage_impact": lineage_impact,
