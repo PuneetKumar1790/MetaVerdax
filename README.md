@@ -27,7 +27,10 @@ MetaVerdax provides an AI-agent layer over metadata + observability to prevent r
 
 - FastAPI backend with streaming chat endpoint (SSE)
 - React frontend (Vite + TypeScript) for chat, uploads, scans, and reporting views
-- MCP client for OpenMetadata (`/mcp`) with read + write actions
+- OpenMetadata client integration:
+  - reads metadata context through MCP
+  - writes governance artifacts to OpenMetadata REST APIs (feed/tasks/tags)
+  - falls back to mock MCP write-back if OpenMetadata is unreachable
 - LLM abstraction layer (Groq, Gemini, Anthropic)
 - MetaVerdax runtime integration:
   - schema/range/null validation
@@ -38,6 +41,7 @@ MetaVerdax provides an AI-agent layer over metadata + observability to prevent r
 - Demo UI surfaces governance write-backs directly:
   - observation, task, and tag chips
   - live scan summary with lineage and carbon impact
+  - `View in OpenMetadata` deep-link for scanned table/entity
   - PDF report download link
 - Session history persistence (in-memory + SQLite)
 - Scan result persistence and compliance queries (MongoDB)
@@ -61,9 +65,10 @@ FastAPI API (app/main.py + app/routes/agent_routes.py)
           +--> LLM Client (app/llm/client.py)
           |      - planning JSON + response synthesis
           |
-          +--> OpenMetadata MCP Client (app/mcp_client.py)
-          |      - get_table, get_lineage, profiles
-          |      - push observation, create task, tag entity
+          +--> OpenMetadata Client (app/mcp_client.py)
+          |      - reads: MCP endpoints (table, lineage, profiles)
+          |      - writes: OpenMetadata REST (observation/task/tag)
+          |      - fallback: mock MCP write-back
           |
           +--> MetaVerdax Core Modules (external reference root)
                  - validator, drift detector, anomaly scorer
@@ -97,7 +102,8 @@ tests/
 
 - Python 3.11+
 - MongoDB running locally or remotely
-- OpenMetadata instance with MCP endpoint (or mock MCP for demo)
+- OpenMetadata instance running (recommended: `http://localhost:8585`)
+- Optional mock MCP server for offline/synthetic demo mode
 - Access to MetaVerdax runtime source (configured via `VERDAX_REFERENCE_ROOT`)
 - At least one LLM provider API key (Groq/Gemini/Anthropic)
 
@@ -109,6 +115,7 @@ Create `.env` in repo root (example):
 # OpenMetadata / MCP
 OPENMETADATA_URL=http://localhost:8585
 OPENMETADATA_TOKEN=
+OPENMETADATA_JWT_TOKEN=
 MCP_ENDPOINT=/mcp
 
 # LLM
@@ -128,6 +135,11 @@ MONGODB_DB=verdax
 MONGODB_SCANS_COLLECTION=verdax_scans
 
 ```
+
+Auth note:
+- `OPENMETADATA_JWT_TOKEN` is preferred for real OpenMetadata UI/API sessions.
+- `OPENMETADATA_TOKEN` (PAT) can still be used when available.
+- If both are set, the app uses JWT first.
 
 Optional environment variable for MetaVerdax module imports:
 
@@ -156,7 +168,52 @@ npm --prefix frontend install
 npm --prefix frontend run dev -- --host 127.0.0.1 --port 5173
 ```
 
-## Demo Mode (Synthetic Data + Mock MCP)
+## Quick Start (Fastest Demo Launch)
+
+Use the preconfigured VS Code task for one-click startup:
+
+1. Open Command Palette.
+2. Run `Tasks: Run Build Task`.
+3. Select `MetaVerdax: Run Full Stack`.
+
+This starts:
+- mock MCP (`tests/demo_setup.py --mock-mcp`)
+- backend (`uvicorn app.main:app` on `127.0.0.1:8000`)
+- frontend (`vite` on `127.0.0.1:5173`)
+
+If you prefer terminal commands instead of VS Code tasks, run these in separate terminals:
+
+```bash
+# Terminal 1
+.venv/bin/python tests/demo_setup.py --mock-mcp
+```
+
+```bash
+# Terminal 2
+OPENMETADATA_URL=http://localhost:8585 MCP_ENDPOINT=/mcp \
+.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+```bash
+# Terminal 3
+VITE_API_BASE_URL=http://127.0.0.1:8000 npm --prefix frontend run dev -- --host 127.0.0.1 --port 5173
+```
+
+Open:
+- App: `http://127.0.0.1:5173/app`
+- OpenMetadata: `http://localhost:8585`
+
+## Real OpenMetadata Demo Mode (Recommended)
+
+Set:
+- `OPENMETADATA_URL=http://localhost:8585`
+- `OPENMETADATA_JWT_TOKEN=<token from /api/v1/users/login>`
+Then run backend + frontend and verify in UI:
+- `OpenMetadata connected` health indicator
+- scan summary shows observation/task/tag chips
+- `View in OpenMetadata` link opens the corresponding table/entity page
+
+## Mock MCP Demo Mode (Fallback)
 
 Generate demo assets:
 
