@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from itertools import count
 import json
 import logging
@@ -166,6 +167,7 @@ class OpenMetadataMCPClient:
 
     async def push_observation(self, fqn: str, observation: dict) -> dict:
         """Push a MetaVerdax observation into OpenMetadata feed."""
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         feed_payload = {
             "from": "admin",
             "message": f"MetaVerdax observation for {fqn}: {json.dumps(observation, default=str)}",

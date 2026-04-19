@@ -14,5 +14,6 @@ screenshots/
 # Generated runtime artifacts
 reports/agent/*.pdf
 reports/agent/*.summary.json
+HACKATHON_5_MIN_DEMO_SCRIPT.md
 meta_verdax_sessions.db
 verdax.db
