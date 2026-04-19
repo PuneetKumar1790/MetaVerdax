@@ -167,18 +167,23 @@ class OpenMetadataMCPClient:
 
     async def push_observation(self, fqn: str, observation: dict) -> dict:
         """Push a MetaVerdax observation into OpenMetadata feed."""
-        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        risk_level = str(observation.get("risk_level", "UNKNOWN"))
+        drift = observation.get("drift", {}) if isinstance(observation.get("drift"), dict) else {}
+        validation = observation.get("validation", {}) if isinstance(observation.get("validation"), dict) else {}
+        anomaly = observation.get("anomaly", {}) if isinstance(observation.get("anomaly"), dict) else {}
+        drift_score = drift.get("drift_score", "n/a")
+        anomaly_rate = anomaly.get("anomaly_rate", "n/a")
+        critical_failures = validation.get("critical_failures", "n/a")
+
         feed_payload = {
             "from": "admin",
-            "message": f"MetaVerdax observation for {fqn}: {json.dumps(observation, default=str)}",
+            "message": (
+                f"MetaVerdax observation for {fqn}. "
+                f"Risk={risk_level}, drift_score={drift_score}, "
+                f"anomaly_rate={anomaly_rate}, critical_failures={critical_failures}."
+            ),
             "about": self._entity_link_for_table(fqn),
-            "type": "Task",
-            "taskDetails": {
-                "type": "RequestTag",
-                "assignees": [],
-                "oldValue": "",
-                "suggestion": "MetaVerdax observation logged",
-            },
+            "type": "Conversation",
         }
         try:
             result = await self._post_feed(feed_payload)
@@ -212,7 +217,7 @@ class OpenMetadataMCPClient:
             "type": "Task",
             "taskDetails": {
                 "assignees": [assignee] if assignee else [],
-                "oldValue": "",
+                "oldValue": "{}",
                 "suggestion": title,
                 "type": "RequestTag",
             },
@@ -250,19 +255,46 @@ class OpenMetadataMCPClient:
             if not table_id:
                 raise MCPConnectionError(f"Could not resolve table id for {fqn}")
             return await self._patch_table_tags(fqn=fqn, table_id=table_id, tags=tags)
-        except MCPNetworkError as exc:
-            logger.warning("REST tag write failed, falling back to MCP: %s", exc)
-            return await self.call_tool("add_tags", {"fullyQualifiedName": fqn, "tags": tags})
+        except MCPError as exc:
+            logger.warning("REST tag write failed for %s: %s", fqn, exc)
+            lowered = str(exc).lower()
+            if "not found" in lowered or "could not resolve table id" in lowered:
+                return {"status": "skipped", "reason": f"table_not_found:{fqn}"}
+            try:
+                return await self.call_tool("add_tags", {"fullyQualifiedName": fqn, "tags": tags})
+            except MCPError as fallback_exc:
+                logger.warning("MCP tag fallback failed for %s: %s", fqn, fallback_exc)
+                return {"status": "skipped", "reason": "tag_write_unavailable"}
 
     @staticmethod
     def _entity_link_for_table(fqn: str) -> str:
         return f"<#E::table::{fqn}>"
 
+    @staticmethod
+    def _fallback_entity_link() -> str:
+        # This entity exists in default/local OpenMetadata setups.
+        return "<#E::user::admin>"
+
     async def _post_feed(self, payload: dict[str, Any]) -> dict[str, Any]:
         url = f"{self._api_base_url}/api/v1/feed"
-        try:
+
+        async def _do_post(body: dict[str, Any]) -> httpx.Response:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(url, headers=self._headers, json=payload)
+                return await client.post(url, headers=self._headers, json=body)
+
+        try:
+            response = await _do_post(payload)
+
+            # Retry with a stable fallback entity when the table FQN is unknown.
+            if (
+                response.status_code == 404
+                and isinstance(payload.get("about"), str)
+                and payload["about"].startswith("<#E::table::")
+            ):
+                retry_payload = dict(payload)
+                retry_payload["about"] = self._fallback_entity_link()
+                response = await _do_post(retry_payload)
+
             self._raise_for_status(response)
             body = response.json() if response.text else {}
             return {

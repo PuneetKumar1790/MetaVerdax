@@ -2,6 +2,12 @@
 
 AI-powered data governance and observability agent for OpenMetadata.
 
+## What it does
+
+MetaVerdax turns natural-language requests into governance actions for datasets. It reads metadata from OpenMetadata, runs validation/drift/anomaly checks, assigns a risk level, and writes the result back as observations, tasks, and tags.
+
+It also generates PDF reports with lineage and carbon-impact context for audit-ready demos.
+
 MetaVerdax turns natural-language requests into executable governance workflows:
 - reads metadata from OpenMetadata through MCP
 - runs MetaVerdax validation/drift/anomaly checks on incoming datasets
@@ -79,6 +85,17 @@ Persistence:
 - MongoDB: scan results / blocked retrain analytics
 ```
 
+## OpenMetadata APIs Called
+
+MetaVerdax calls these OpenMetadata endpoints directly or through the MCP bridge:
+
+- `POST /api/v1/users/login` — obtain a JWT for real OpenMetadata sessions
+- `GET /api/v1/tables/{id}` and `GET /api/v1/tables/name/{fullyQualifiedName}` — resolve the target table
+- `POST /api/v1/feed` — create observations and task-style governance items on the table activity feed
+- `PATCH /api/v1/tables/{fullyQualifiedName}` — attach `VerdaxRisk.*` tags using the direct FQN patch flow
+- `PATCH /api/v1/tables/{id}` — fallback patch flow for tags when the FQN patch is rejected
+- OpenMetadata MCP bridge at `/mcp` — read table context, lineage, and profiling data when available
+
 ## Repository Layout
 
 ```text
@@ -108,6 +125,8 @@ tests/
 - At least one LLM provider API key (Groq/Gemini/Anthropic)
 
 ## Configuration
+
+MetaVerdax connects to a real OpenMetadata instance by default. A mock MCP server (`tests/demo_setup.py`) is included as a fallback for offline development and testing.
 
 Create `.env` in repo root (example):
 
@@ -177,7 +196,7 @@ Use the preconfigured VS Code task for one-click startup:
 3. Select `MetaVerdax: Run Full Stack`.
 
 This starts:
-- mock MCP (`tests/demo_setup.py --mock-mcp`)
+- mock MCP dev tool (`tests/demo_setup.py --mock-mcp`)
 - backend (`uvicorn app.main:app` on `127.0.0.1:8000`)
 - frontend (`vite` on `127.0.0.1:5173`)
 
@@ -205,17 +224,30 @@ Open:
 
 ## Real OpenMetadata Demo Mode (Recommended)
 
+> The demo video was recorded against a live OpenMetadata instance (localhost:8585). Mock fallback was not used during recording.
+
 Set:
 - `OPENMETADATA_URL=http://localhost:8585`
 - `OPENMETADATA_JWT_TOKEN=<token from /api/v1/users/login>`
-Then run backend + frontend and verify in UI:
+Then run backend + frontend with these exact commands:
+
+```bash
+OPENMETADATA_URL=http://localhost:8585 MCP_ENDPOINT=/mcp \
+.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+```bash
+VITE_API_BASE_URL=http://127.0.0.1:8000 npm --prefix frontend run dev -- --host 127.0.0.1 --port 5173
+```
+
+Verify in the UI:
 - `OpenMetadata connected` health indicator
 - scan summary shows observation/task/tag chips
 - `View in OpenMetadata` link opens the corresponding table/entity page
 
 ## Mock MCP Demo Mode (Fallback)
 
-Generate demo assets:
+Generate demo assets with the dev/mock helper:
 
 ```bash
 python tests/demo_setup.py --output-dir tests/demo_assets
@@ -230,6 +262,31 @@ python tests/demo_setup.py --mock-mcp
 Then point app config to:
 - `OPENMETADATA_URL=http://localhost:8586`
 - `MCP_ENDPOINT=/mcp`
+
+## How to Run It Locally
+
+Exact commands for a local run:
+
+```bash
+pip install -r requirements.txt
+```
+
+```bash
+npm --prefix frontend install
+```
+
+```bash
+OPENMETADATA_URL=http://localhost:8585 MCP_ENDPOINT=/mcp \
+.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+```bash
+VITE_API_BASE_URL=http://127.0.0.1:8000 npm --prefix frontend run dev -- --host 127.0.0.1 --port 5173
+```
+
+Open:
+- App: `http://127.0.0.1:5173/app`
+- OpenMetadata: `http://localhost:8585`
 
 ## API Endpoints
 

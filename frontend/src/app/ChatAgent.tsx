@@ -26,7 +26,7 @@ export default function ChatAgent() {
   const [scanLoading, setScanLoading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [latestScan, setLatestScan] = useState<ScanResultSummary | null>(null);
-  const [uploadTableFqn, setUploadTableFqn] = useState('ecommerce.customer_churn_v3');
+  const [uploadTableFqn, setUploadTableFqn] = useState('metaverdax_mysql.ecommerce.public.customer_churn_v3');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
