@@ -4,9 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import count
+import json
+import logging
 from typing import Any
+from urllib.parse import quote
 
 import httpx
+
+
+logger = logging.getLogger(__name__)
 
 
 class MCPError(Exception):
@@ -15,6 +21,10 @@ class MCPError(Exception):
 
 class MCPConnectionError(MCPError):
     """Raised when the MCP endpoint cannot be reached."""
+
+
+class MCPNetworkError(MCPConnectionError):
+    """Raised for transport-level connectivity failures."""
 
 
 class MCPToolNotFoundError(MCPError):
@@ -42,8 +52,16 @@ class OpenMetadataMCPClient:
             token: OpenMetadata Personal Access Token.
         """
         self.base_url = base_url.rstrip("/")
+        self._api_base_url = self._derive_api_base_url(base_url)
         self.token = token
         self._rpc_ids = count(start=1)
+
+    @staticmethod
+    def _derive_api_base_url(base_url: str) -> str:
+        normalized = base_url.rstrip("/")
+        if normalized.endswith("/mcp"):
+            return normalized[: -len("/mcp")]
+        return normalized
 
     @property
     def _headers(self) -> dict[str, str]:
@@ -147,12 +165,35 @@ class OpenMetadataMCPClient:
         return []
 
     async def push_observation(self, fqn: str, observation: dict) -> dict:
-        """Push a MetaVerdax observation into OpenMetadata test/quality artifacts."""
-        payload = {"fullyQualifiedName": fqn, "observation": observation}
+        """Push a MetaVerdax observation into OpenMetadata feed."""
+        feed_payload = {
+            "from": "admin",
+            "message": f"MetaVerdax observation for {fqn}: {json.dumps(observation, default=str)}",
+            "about": self._entity_link_for_table(fqn),
+            "type": "Task",
+            "taskDetails": {
+                "type": "RequestTag",
+                "assignees": [],
+                "oldValue": "",
+                "suggestion": "MetaVerdax observation logged",
+            },
+        }
         try:
-            return await self.call_tool("create_test_result", payload)
-        except MCPToolNotFoundError:
-            return await self.call_tool("add_observation", payload)
+            result = await self._post_feed(feed_payload)
+            return {
+                "observation_id": result.get("id") or result.get("threadTs"),
+                "status": "posted",
+                "status_code": result.get("status_code"),
+                "endpoint": result.get("endpoint"),
+                "result": result.get("result"),
+            }
+        except MCPNetworkError as exc:
+            logger.warning("REST observation write failed, falling back to MCP: %s", exc)
+            payload = {"fullyQualifiedName": fqn, "observation": observation}
+            try:
+                return await self.call_tool("create_test_result", payload)
+            except MCPToolNotFoundError:
+                return await self.call_tool("add_observation", payload)
 
     async def create_task(
         self,
@@ -162,6 +203,31 @@ class OpenMetadataMCPClient:
         assignee: str | None = None,
     ) -> dict:
         """Create an OpenMetadata task for high-risk scans."""
+        feed_payload: dict[str, Any] = {
+            "from": "admin",
+            "message": f"{title}: {description}",
+            "about": self._entity_link_for_table(fqn),
+            "type": "Task",
+            "taskDetails": {
+                "assignees": [assignee] if assignee else [],
+                "oldValue": "",
+                "suggestion": title,
+                "type": "RequestTag",
+            },
+        }
+
+        try:
+            result = await self._post_feed(feed_payload)
+            task_info = result.get("result", {}).get("task", {}) if isinstance(result.get("result"), dict) else {}
+            return {
+                "id": task_info.get("id") or result.get("id"),
+                "status": task_info.get("status", "Open"),
+                "status_code": result.get("status_code"),
+                "endpoint": result.get("endpoint"),
+                "result": result.get("result"),
+            }
+        except MCPNetworkError as exc:
+            logger.warning("REST task write failed, falling back to MCP: %s", exc)
         args: dict[str, Any] = {
             "fullyQualifiedName": fqn,
             "title": title,
@@ -172,8 +238,109 @@ class OpenMetadataMCPClient:
         return await self.call_tool("create_task", args)
 
     async def tag_entity(self, fqn: str, tags: list[str]) -> dict:
-        """Tag an entity with MetaVerdax risk labels."""
-        return await self.call_tool("add_tags", {"fullyQualifiedName": fqn, "tags": tags})
+        """Tag a table entity with MetaVerdax risk labels."""
+        if not tags:
+            return {"status": "skipped", "reason": "No tags provided"}
+
+        try:
+            table = await self._get_table_by_fqn(fqn)
+            table_id = str(table.get("id", "")).strip()
+            if not table_id:
+                raise MCPConnectionError(f"Could not resolve table id for {fqn}")
+            return await self._patch_table_tags(fqn=fqn, table_id=table_id, tags=tags)
+        except MCPNetworkError as exc:
+            logger.warning("REST tag write failed, falling back to MCP: %s", exc)
+            return await self.call_tool("add_tags", {"fullyQualifiedName": fqn, "tags": tags})
+
+    @staticmethod
+    def _entity_link_for_table(fqn: str) -> str:
+        return f"<#E::table::{fqn}>"
+
+    async def _post_feed(self, payload: dict[str, Any]) -> dict[str, Any]:
+        url = f"{self._api_base_url}/api/v1/feed"
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, headers=self._headers, json=payload)
+            self._raise_for_status(response)
+            body = response.json() if response.text else {}
+            return {
+                "status_code": response.status_code,
+                "endpoint": url,
+                "result": body,
+                "id": body.get("id") if isinstance(body, dict) else None,
+            }
+        except httpx.RequestError as exc:
+            raise MCPNetworkError(f"OpenMetadata feed request failed: {exc}") from exc
+        except ValueError as exc:
+            raise MCPConnectionError("OpenMetadata feed response is not valid JSON") from exc
+
+    async def _get_table_by_fqn(self, fqn: str) -> dict[str, Any]:
+        encoded = quote(fqn, safe="")
+        url = f"{self._api_base_url}/api/v1/tables/name/{encoded}"
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, headers=self._headers)
+            self._raise_for_status(response)
+            body = response.json()
+            if not isinstance(body, dict):
+                raise MCPConnectionError("OpenMetadata get-table response type is invalid")
+            return body
+        except httpx.RequestError as exc:
+            raise MCPNetworkError(f"OpenMetadata table lookup failed: {exc}") from exc
+        except ValueError as exc:
+            raise MCPConnectionError("OpenMetadata get-table response is not valid JSON") from exc
+
+    async def _patch_table_tags(self, fqn: str, table_id: str, tags: list[str]) -> dict[str, Any]:
+        encoded_fqn = quote(fqn, safe="")
+        fqn_url = f"{self._api_base_url}/api/v1/tables/{encoded_fqn}"
+        id_url = f"{self._api_base_url}/api/v1/tables/{table_id}"
+
+        # Keep the direct FQN PATCH attempt requested in the migration brief.
+        fqn_payload = {"tags": [{"tagFQN": tag} for tag in tags]}
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.patch(fqn_url, headers=self._headers, json=fqn_payload)
+            if response.status_code < 400:
+                body = response.json() if response.text else {}
+                return {
+                    "status": "tagged",
+                    "tags": tags,
+                    "status_code": response.status_code,
+                    "endpoint": fqn_url,
+                    "result": body,
+                }
+        except httpx.RequestError as exc:
+            raise MCPNetworkError(f"OpenMetadata tag patch failed: {exc}") from exc
+        except ValueError as exc:
+            raise MCPConnectionError("OpenMetadata tag patch response is not valid JSON") from exc
+
+        json_patch = [
+            {
+                "op": "add",
+                "path": "/tags",
+                "value": [{"tagFQN": tag, "source": "Classification"} for tag in tags],
+            }
+        ]
+        patch_headers = dict(self._headers)
+        patch_headers["Content-Type"] = "application/json-patch+json"
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.patch(id_url, headers=patch_headers, json=json_patch)
+            self._raise_for_status(response)
+            body = response.json() if response.text else {}
+            return {
+                "status": "tagged",
+                "tags": tags,
+                "status_code": response.status_code,
+                "endpoint": id_url,
+                "result": body,
+            }
+        except httpx.RequestError as exc:
+            raise MCPNetworkError(f"OpenMetadata tag patch failed: {exc}") from exc
+        except ValueError as exc:
+            raise MCPConnectionError("OpenMetadata tag patch response is not valid JSON") from exc
 
     async def _rpc_call_with_fallbacks(
         self,

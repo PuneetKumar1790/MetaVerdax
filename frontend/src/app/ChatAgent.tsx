@@ -144,6 +144,16 @@ export default function ChatAgent() {
             <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-white/75">
               {governance.tag ? `Tag ${String(governance.tag)}` : 'Tag pending'}
             </span>
+            {scan.table_fqn && (
+              <a
+                href={`http://localhost:8585/table/${scan.table_fqn}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 underline text-xs ml-2"
+              >
+                View in OpenMetadata ↗
+              </a>
+            )}
           </div>
         </div>
         {scan.pdf_url && (

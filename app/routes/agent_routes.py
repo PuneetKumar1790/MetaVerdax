@@ -130,7 +130,7 @@ def _get_agent(session_id: str) -> VerdaxAgent:
 
     mcp_client = OpenMetadataMCPClient(
         base_url=f"{settings.openmetadata_url.rstrip('/')}{settings.mcp_endpoint}",
-        token=settings.openmetadata_token,
+        token=settings.openmetadata_auth_token,
     )
     agent = VerdaxAgent(mcp_client=mcp_client, llm_client=_build_llm_client(), model=settings.llm_model)
 
@@ -254,7 +254,7 @@ async def get_blocked_retrains() -> dict[str, Any]:
 async def frontend_health() -> dict[str, Any]:
     mcp_client = OpenMetadataMCPClient(
         base_url=f"{settings.openmetadata_url.rstrip('/')}{settings.mcp_endpoint}",
-        token=settings.openmetadata_token,
+        token=settings.openmetadata_auth_token,
     )
 
     openmetadata_connected = True

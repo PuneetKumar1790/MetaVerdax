@@ -306,13 +306,13 @@ class VerdaxAgent:
             "carbon_saved_kg": float(carbon.get("co2_saved_kg", 0.0)),
             "governance_actions": {
                 "observation": observation.get("observation_id") if isinstance(observation, dict) else None,
-                "task": task.get("id") if isinstance(task, dict) else None,
+                "task": str(task.get("id")) if isinstance(task, dict) and task.get("id") is not None else None,
                 "tag": ",".join(tag.get("tags", [])) if isinstance(tag, dict) and isinstance(tag.get("tags"), list) else None,
                 "task_status": task.get("status") if isinstance(task, dict) else None,
                 "tag_status": tag.get("status") if isinstance(tag, dict) else None,
             },
             "pdf_path": pdf.get("pdf_path"),
-            "openmetadata_task_id": task.get("id") if isinstance(task, dict) else None,
+            "openmetadata_task_id": str(task.get("id")) if isinstance(task, dict) and task.get("id") is not None else None,
             "lineage_impact": lineage_impact,
         }
 

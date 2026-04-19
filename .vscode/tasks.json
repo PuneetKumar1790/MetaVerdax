@@ -33,7 +33,7 @@
       "args": ["-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000"],
       "options": {
         "env": {
-          "OPENMETADATA_URL": "http://127.0.0.1:8586",
+          "OPENMETADATA_URL": "http://localhost:8585",
           "MCP_ENDPOINT": "/mcp"
         }
       },
@@ -90,7 +90,6 @@
     {
       "label": "MetaVerdax: Run Full Stack",
       "dependsOn": [
-        "MetaVerdax: Start Mock MCP",
         "MetaVerdax: Start Backend",
         "MetaVerdax: Start Frontend"
       ],

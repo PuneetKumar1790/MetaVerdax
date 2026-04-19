@@ -9,7 +9,12 @@ class Settings(BaseSettings):
     # MCP / OpenMetadata
     openmetadata_url: str = "http://localhost:8585"
     openmetadata_token: str = ""
+    openmetadata_jwt_token: str = ""
     mcp_endpoint: str = "/mcp"
+
+    @property
+    def openmetadata_auth_token(self) -> str:
+        return self.openmetadata_jwt_token or self.openmetadata_token
 
     # LLM
     llm_provider: str = "groq"  # groq | gemini | anthropic
