@@ -2,7 +2,9 @@
 
 AI-powered data governance and observability agent for OpenMetadata.
 
-Demo video: [https://www.youtube.com/watch?v=t0JEXYOQWjY](https://www.youtube.com/watch?v=t0JEXYOQWjY)
+## 🎥 Demo
+
+Watch the full demo: [https://www.youtube.com/watch?v=t0JEXYOQWjY](https://www.youtube.com/watch?v=t0JEXYOQWjY)
 
 ## What it does
 
@@ -375,7 +377,8 @@ Why this project is strong:
 
 - add explicit retrain-gate endpoint for CI/CD or orchestrator hooks
 - strengthen explainability UI section with check-by-check rationale
-- add architecture diagram image for submission package
+- real-time streaming validation for Kafka pipelines
+- OpenMetadata Marketplace distribution package
 
 ## License
 
