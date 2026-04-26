@@ -10,6 +10,7 @@ export interface ChatResponse {
 export interface ScanResultSummary {
   scan_id?: string;
   table_fqn?: string;
+  dataset_path?: string;
   risk_level?: string;
   carbon_saved_kg?: number;
   lineage_impact?: Record<string, number>;
@@ -75,10 +76,10 @@ async function fetchWithHandling<T>(url: string, options?: RequestInit): Promise
 }
 
 export const api = {
-  chat: (message: string) => 
+  chat: (body: { message: string; session_id?: string; dataset_path?: string | null; table_fqn?: string | null }) => 
     fetchWithHandling<ChatResponse>('/api/chat', {
       method: 'POST',
-      body: JSON.stringify({ message }),
+      body: JSON.stringify(body),
     }),
 
   validate: (body: { message: string; session_id?: string; dataset_path?: string; table_fqn?: string }) =>

@@ -2,6 +2,8 @@
 
 AI-powered data governance and observability agent for OpenMetadata.
 
+Demo video: [https://www.youtube.com/watch?v=t0JEXYOQWjY](https://www.youtube.com/watch?v=t0JEXYOQWjY)
+
 ## What it does
 
 MetaVerdax turns natural-language requests into governance actions for datasets. It reads metadata from OpenMetadata, runs validation/drift/anomaly checks, assigns a risk level, and writes the result back as observations, tasks, and tags.
@@ -9,6 +11,7 @@ MetaVerdax turns natural-language requests into governance actions for datasets.
 It also generates PDF reports with lineage and carbon-impact context for audit-ready demos.
 
 MetaVerdax turns natural-language requests into executable governance workflows:
+
 - reads metadata from OpenMetadata through MCP
 - runs MetaVerdax validation/drift/anomaly checks on incoming datasets
 - assigns risk (`SAFE`, `WARN`, `REVIEW`, `CRITICAL`)
@@ -18,6 +21,7 @@ MetaVerdax turns natural-language requests into executable governance workflows:
 ## Problem
 
 Teams lose time and money when low-quality data reaches ML retraining:
+
 - data scientists often spend 60-80% of effort on data cleanup
 - bad retrains can waste $10k-$100k+ in compute
 - data quality incidents can create large business and compliance risk
@@ -34,17 +38,20 @@ MetaVerdax provides an AI-agent layer over metadata + observability to prevent r
 - FastAPI backend with streaming chat endpoint (SSE)
 - React frontend (Vite + TypeScript) for chat, uploads, scans, and reporting views
 - OpenMetadata client integration:
+
   - reads metadata context through MCP
   - writes governance artifacts to OpenMetadata REST APIs (feed/tasks/tags)
   - falls back to mock MCP write-back if OpenMetadata is unreachable
 - LLM abstraction layer (Groq, Gemini, Anthropic)
 - MetaVerdax runtime integration:
+
   - schema/range/null validation
   - drift detection
   - anomaly scoring
   - carbon savings estimation
   - PDF report generation
 - Demo UI surfaces governance write-backs directly:
+
   - observation, task, and tag chips
   - live scan summary with lineage and carbon impact
   - `View in OpenMetadata` deep-link for scanned table/entity
@@ -52,6 +59,7 @@ MetaVerdax provides an AI-agent layer over metadata + observability to prevent r
 - Session history persistence (in-memory + SQLite)
 - Scan result persistence and compliance queries (MongoDB)
 - Demo tooling:
+
   - synthetic safe/poisoned datasets
   - mock MCP server
 
@@ -156,6 +164,7 @@ MONGODB_SCANS_COLLECTION=verdax_scans
 ```
 
 Auth note:
+
 - `OPENMETADATA_JWT_TOKEN` is preferred for real OpenMetadata UI/API sessions.
 - `OPENMETADATA_TOKEN` (PAT) can still be used when available.
 - If both are set, the app uses JWT first.
@@ -196,6 +205,7 @@ Use the preconfigured VS Code task for one-click startup:
 3. Select `MetaVerdax: Run Full Stack`.
 
 This starts:
+
 - mock MCP dev tool (`tests/demo_setup.py --mock-mcp`)
 - backend (`uvicorn app.main:app` on `127.0.0.1:8000`)
 - frontend (`vite` on `127.0.0.1:5173`)
@@ -219,6 +229,7 @@ VITE_API_BASE_URL=http://127.0.0.1:8000 npm --prefix frontend run dev -- --host 
 ```
 
 Open:
+
 - App: `http://127.0.0.1:5173/app`
 - OpenMetadata: `http://localhost:8585`
 
@@ -227,8 +238,10 @@ Open:
 > The demo video was recorded against a live OpenMetadata instance (localhost:8585). Mock fallback was not used during recording.
 
 Set:
+
 - `OPENMETADATA_URL=http://localhost:8585`
 - `OPENMETADATA_JWT_TOKEN=<token from /api/v1/users/login>`
+
 Then run backend + frontend with these exact commands:
 
 ```bash
@@ -241,6 +254,7 @@ VITE_API_BASE_URL=http://127.0.0.1:8000 npm --prefix frontend run dev -- --host 
 ```
 
 Verify in the UI:
+
 - `OpenMetadata connected` health indicator
 - scan summary shows observation/task/tag chips
 - `View in OpenMetadata` link opens the corresponding table/entity page
@@ -260,6 +274,7 @@ python tests/demo_setup.py --mock-mcp
 ```
 
 Then point app config to:
+
 - `OPENMETADATA_URL=http://localhost:8586`
 - `MCP_ENDPOINT=/mcp`
 
@@ -285,6 +300,7 @@ VITE_API_BASE_URL=http://127.0.0.1:8000 npm --prefix frontend run dev -- --host 
 ```
 
 Open:
+
 - App: `http://127.0.0.1:5173/app`
 - OpenMetadata: `http://localhost:8585`
 
@@ -340,6 +356,7 @@ pytest -q
 ```
 
 Current coverage focuses on:
+
 - agent orchestration and risk outputs
 - MCP client behavior and error handling
 
@@ -348,18 +365,18 @@ Current coverage focuses on:
 Primary track: **MCP Ecosystem & AI Agents**
 
 Why this project is strong:
+
 - uses MCP for both read and write operations
 - combines metadata context + runtime data quality checks
 - produces operational and compliance outcomes (tasks, tags, reports)
 - demonstrates practical AI governance value with clear ROI narrative
 
-## Known Gaps / Next Iterations
+## Roadmap
 
 - add explicit retrain-gate endpoint for CI/CD or orchestrator hooks
-- wire risk thresholds fully from config (avoid hardcoded values)
 - strengthen explainability UI section with check-by-check rationale
-- add demo video and architecture diagram image for submission package
+- add architecture diagram image for submission package
 
 ## License
 
-Add your preferred license here before public release.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).

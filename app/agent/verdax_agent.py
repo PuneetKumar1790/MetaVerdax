@@ -48,13 +48,15 @@ class VerdaxAgent:
         self.session_history: list[dict[str, str]] = []
         self.last_execution_context: dict[str, Any] = {}
 
-    async def run(self, user_message: str, dataset_path: str | None = None) -> AsyncGenerator[str, None]:
+    async def run(self, user_message: str, dataset_path: str | None = None, table_fqn: str | None = None) -> AsyncGenerator[str, None]:
         """Run the full agent loop and stream final response tokens."""
         self.session_history.append({"role": "user", "content": user_message})
 
         plan = await self._plan(user_message)
         if dataset_path:
             plan.setdefault("entities", {})["dataset_path"] = dataset_path
+        if table_fqn:
+            plan.setdefault("entities", {})["table_fqn"] = table_fqn
 
         execution_context = await self._execute_actions(plan, dataset_path=dataset_path)
         self.last_execution_context = execution_context
@@ -102,6 +104,12 @@ class VerdaxAgent:
         entities = plan.get("entities", {})
         table_fqn = entities.get("table_fqn")
         resolved_dataset_path = dataset_path or entities.get("dataset_path")
+        if isinstance(resolved_dataset_path, str):
+            candidate = resolved_dataset_path.strip()
+            if not candidate or candidate.startswith("/path/to/") or candidate in {"dataset.csv", "dataset.parquet", "file.csv", "file.parquet"}:
+                resolved_dataset_path = None
+            elif not Path(candidate).exists() and not candidate.startswith(str(Path(settings.temp_upload_dir).resolve())):
+                resolved_dataset_path = None
 
         for action in plan.get("actions", []):
             try:
@@ -154,6 +162,8 @@ class VerdaxAgent:
 
     def _calculate_risk(self, validation_result: dict, drift_result: dict, anomaly_result: dict) -> str:
         """Compute SAFE/WARN/REVIEW/CRITICAL based on validation, drift, anomaly."""
+        if validation_result.get("skipped"):
+            return "REVIEW"
         critical_failures = int(validation_result.get("critical_failures", 0))
         warnings = int(validation_result.get("warnings", 0))
         drift_score = float(drift_result.get("drift_score", 0.0))
@@ -175,19 +185,37 @@ class VerdaxAgent:
     ) -> dict[str, Any]:
         if not dataset_path:
             return {
-                "validation": {"critical_failures": 0, "warnings": 0, "passed": True},
+                "validation": {
+                    "critical_failures": 0,
+                    "warnings": 1,
+                    "passed": False,
+                    "skipped": True,
+                    "failed_checks": [],
+                    "recommendation": "UPLOAD DATASET — NO FILE PROVIDED",
+                    "checks": {},
+                },
                 "drift": {"drift_score": 0.0, "drift_detected": False},
                 "anomaly": {"anomaly_rate": 0.0, "score": 0.0},
-                "notes": "No dataset path provided; runtime checks skipped.",
+                "notes": "No dataset file was provided; runtime checks were skipped.",
+                "skipped": True,
             }
 
         path = Path(dataset_path)
         if not path.exists():
             return {
-                "validation": {"critical_failures": 1, "warnings": 0, "passed": False},
+                "validation": {
+                    "critical_failures": 0,
+                    "warnings": 1,
+                    "passed": False,
+                    "skipped": True,
+                    "failed_checks": [],
+                    "recommendation": "UPLOAD DATASET — FILE NOT FOUND",
+                    "checks": {},
+                },
                 "drift": {"drift_score": 0.0, "drift_detected": False},
-                "anomaly": {"anomaly_rate": 1.0, "score": 1.0},
-                "notes": f"Dataset file not found: {dataset_path}",
+                "anomaly": {"anomaly_rate": 0.0, "score": 0.0},
+                "notes": f"Dataset file was not found, so runtime checks were skipped: {dataset_path}",
+                "skipped": True,
             }
 
         if path.suffix.lower() == ".parquet":
@@ -339,6 +367,9 @@ class VerdaxAgent:
         return [{"role": msg["role"], "content": msg["content"]} for msg in self.session_history[-20:]]
 
     def _build_synthesis_prompt(self, user_message: str, plan: dict, execution_context: dict[str, Any]) -> str:
+        validation = execution_context.get("results", {}).get("run_validation", {}) if isinstance(execution_context.get("results", {}), dict) else {}
+        validation_meta = validation.get("validation", {}) if isinstance(validation, dict) else {}
+        skipped = bool(validation_meta.get("skipped") or validation.get("skipped"))
         return (
             "User asked: "
             f"{user_message}\n"
@@ -346,7 +377,12 @@ class VerdaxAgent:
             f"{json.dumps(plan, indent=2)}\n"
             "Execution context:\n"
             f"{json.dumps(execution_context.get('results', {}), default=str)[:5000]}\n"
-            "Respond with: 1) direct answer, 2) key risk signals, 3) next recommended action."
+            + (
+                "If runtime validation was skipped because no dataset file was provided, say that clearly and ask the user to upload a CSV/Parquet file instead of inventing a file-not-found failure.\n"
+                if skipped
+                else ""
+            )
+            + "Respond with: 1) direct answer, 2) key risk signals, 3) next recommended action."
         )
 
     def _local_summary(self, user_message: str, plan: dict, execution_context: dict[str, Any]) -> str:

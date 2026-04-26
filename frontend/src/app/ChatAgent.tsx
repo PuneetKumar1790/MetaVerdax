@@ -28,6 +28,7 @@ export default function ChatAgent() {
   const [latestScan, setLatestScan] = useState<ScanResultSummary | null>(null);
   const [uploadTableFqn, setUploadTableFqn] = useState('metaverdax_mysql.ecommerce.public.customer_churn_v3');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [sessionId] = useState(() => `frontend-${Math.random().toString(36).slice(2, 10)}`);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -45,7 +46,12 @@ export default function ChatAgent() {
     setError(null);
 
     try {
-      const data: ChatResponse = await api.chat(text.trim());
+      const data: ChatResponse = await api.chat({
+        message: text.trim(),
+        session_id: sessionId,
+        dataset_path: latestScan?.dataset_path ?? null,
+        table_fqn: latestScan?.table_fqn ?? uploadTableFqn,
+      });
       const agentMsg: Message = {
         role: 'agent',
         content: data.response,
@@ -76,7 +82,7 @@ export default function ChatAgent() {
     setScanLoading(true);
     setUploadError(null);
     try {
-      const scan = await api.uploadAndScan(selectedFile, uploadTableFqn, 'frontend-upload-session');
+      const scan = await api.uploadAndScan(selectedFile, uploadTableFqn, sessionId);
       setLatestScan(scan);
       setMessages((prev) => [
         ...prev,

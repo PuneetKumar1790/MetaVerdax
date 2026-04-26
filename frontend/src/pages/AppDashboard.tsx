@@ -26,7 +26,7 @@ export default function AppDashboard() {
       }
     };
     checkHealth();
-    const interval = setInterval(checkHealth, 30000);
+    const interval = setInterval(checkHealth, 5000);
     return () => clearInterval(interval);
   }, []);
 

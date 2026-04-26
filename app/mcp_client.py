@@ -151,7 +151,65 @@ class OpenMetadataMCPClient:
 
     async def get_lineage(self, fqn: str, entity_type: str = "table") -> dict:
         """Fetch lineage graph for an entity."""
-        return await self.call_tool("get_lineage", {"fqn": fqn, "entityType": entity_type})
+        try:
+            result = await self.call_tool("get_lineage", {"fqn": fqn, "entityType": entity_type})
+            if isinstance(result, dict):
+                return self._augment_lineage_counts(result)
+            return {"result": result, "affected_dashboards": 0, "affected_models": 0}
+        except MCPError as exc:
+            logger.warning("MCP lineage lookup failed for %s: %s", fqn, exc)
+            return await self._get_lineage_via_rest(fqn=fqn, entity_type=entity_type)
+
+    async def _get_lineage_via_rest(self, fqn: str, entity_type: str = "table") -> dict[str, Any]:
+        encoded = quote(fqn, safe="")
+        url = f"{self._api_base_url}/api/v1/lineage/{entity_type}/name/{encoded}"
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, headers=self._headers)
+            self._raise_for_status(response)
+            body = response.json() if response.text else {}
+            if not isinstance(body, dict):
+                raise MCPConnectionError("OpenMetadata lineage response type is invalid")
+            return self._augment_lineage_counts(body)
+        except httpx.RequestError as exc:
+            raise MCPNetworkError(f"OpenMetadata lineage request failed: {exc}") from exc
+        except ValueError as exc:
+            raise MCPConnectionError("OpenMetadata lineage response is not valid JSON") from exc
+
+    @staticmethod
+    def _augment_lineage_counts(lineage: dict[str, Any]) -> dict[str, Any]:
+        nodes_by_id: dict[str, str] = {}
+        for node in lineage.get("nodes", []):
+            if isinstance(node, dict):
+                node_id = str(node.get("id", "")).strip()
+                node_type = str(node.get("type", "")).strip().lower()
+                if node_id and node_type:
+                    nodes_by_id[node_id] = node_type
+
+        dashboard_ids: set[str] = set()
+        model_ids: set[str] = set()
+        for edge in lineage.get("downstreamEdges", []):
+            if not isinstance(edge, dict):
+                continue
+            to_raw = edge.get("toEntity")
+            if isinstance(to_raw, dict):
+                entity_id = str(to_raw.get("id", "")).strip()
+                entity_type = str(to_raw.get("type", "")).strip().lower()
+            else:
+                entity_id = str(to_raw or "").strip()
+                entity_type = ""
+            if not entity_type and entity_id:
+                entity_type = nodes_by_id.get(entity_id, "")
+
+            if entity_type == "dashboard" and entity_id:
+                dashboard_ids.add(entity_id)
+            elif entity_type == "mlmodel" and entity_id:
+                model_ids.add(entity_id)
+
+        enriched = dict(lineage)
+        enriched["affected_dashboards"] = len(dashboard_ids)
+        enriched["affected_models"] = len(model_ids)
+        return enriched
 
     async def list_tables_with_drift(self, days: int = 7) -> list[dict]:
         """Search metadata entries related to drift in a rolling time window."""

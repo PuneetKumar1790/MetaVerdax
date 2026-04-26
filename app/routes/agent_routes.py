@@ -27,6 +27,7 @@ agents: dict[str, VerdaxAgent] = {}
 class ChatRequest(BaseModel):
     message: str
     dataset_path: str | None = None
+    table_fqn: str | None = None
     session_id: str
 
 
@@ -50,6 +51,7 @@ class FrontendChatRequest(BaseModel):
     message: str
     session_id: str | None = None
     dataset_path: str | None = None
+    table_fqn: str | None = None
 
 
 class FrontendValidateRequest(BaseModel):
@@ -148,7 +150,7 @@ async def chat_with_agent(body: ChatRequest) -> StreamingResponse:
     async def event_stream():
         full_text = ""
         try:
-            async for token in agent.run(body.message, dataset_path=body.dataset_path):
+            async for token in agent.run(body.message, dataset_path=body.dataset_path, table_fqn=body.table_fqn):
                 full_text += token
                 yield f"data: {json.dumps({'token': token})}\n\n"
 
@@ -261,6 +263,16 @@ async def frontend_health() -> dict[str, Any]:
         await mcp_client.list_tools()
     except Exception:
         openmetadata_connected = False
+        try:
+            async with asyncio.timeout(10):
+                import httpx
+
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    health_url = f"{settings.openmetadata_url.rstrip('/')}/health-check"
+                    response = await client.get(health_url)
+                    openmetadata_connected = response.status_code == 200
+        except Exception:
+            openmetadata_connected = False
 
     return {"status": "ok", "openmetadata_connected": openmetadata_connected}
 
@@ -292,7 +304,7 @@ async def _run_frontend_chat(body: FrontendChatRequest) -> dict[str, Any]:
 
     full_text = ""
     try:
-        async for token in agent.run(body.message, dataset_path=body.dataset_path):
+        async for token in agent.run(body.message, dataset_path=body.dataset_path, table_fqn=body.table_fqn):
             full_text += token
     except Exception as exc:
         safe_error = f"Unable to complete this request right now: {exc}"
@@ -315,7 +327,7 @@ async def frontend_chat(body: FrontendChatRequest) -> dict[str, Any]:
 
 @api_router.post("/validate")
 async def frontend_validate(body: FrontendValidateRequest) -> dict[str, Any]:
-    chat_body = FrontendChatRequest(message=body.message, session_id=body.session_id, dataset_path=body.dataset_path)
+    chat_body = FrontendChatRequest(message=body.message, session_id=body.session_id, dataset_path=body.dataset_path, table_fqn=body.table_fqn)
     result = await _run_frontend_chat(chat_body)
     if body.table_fqn:
         scan_result = result.get("scan_result") or {}
